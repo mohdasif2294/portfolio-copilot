@@ -1,0 +1,39 @@
+[project]
+name = "portfolio-copilot"
+version = "0.1.0"
+description = "AI-powered portfolio analysis with MCP + RAG + Agents"
+authors = [
+    {name = "Mohammad Asif",email = "mohdasif2294@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "anthropic (>=0.76.0,<0.77.0)",
+    "python-dotenv (>=1.2.1,<2.0.0)",
+    "rich (>=14.2.0,<15.0.0)",
+    "structlog (>=25.5.0,<26.0.0)",
+    "fastmcp (>=2.14.3,<3.0.0)",
+    "beautifulsoup4 (>=4.14.3,<5.0.0)",
+    "httpx (>=0.28.1,<0.29.0)",
+    "feedparser (>=6.0.12,<7.0.0)",
+    "lxml (>=6.0.2,<7.0.0)",
+    "sentence-transformers (>=5.2.0,<6.0.0)",
+    "chromadb (>=1.4.1,<2.0.0)",
+    "langgraph (>=1.0.6,<2.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "pytest (>=9.0.2,<10.0.0)",
+    "pytest-asyncio (>=1.3.0,<2.0.0)",
+    "ruff (>=0.14.13,<0.15.0)",
+    "black (>=26.1.0,<27.0.0)",
+    "mypy (>=1.19.1,<2.0.0)",
+    "ipython (>=9.9.0,<10.0.0)",
+    "jupyter (>=1.1.1,<2.0.0)"
+]
