@@ -40,6 +40,11 @@ class AgentOrchestrator:
             r"which\s+(stock|holding).*(worst|best|losing|winning)",
             r"portfolio\s+(analysis|insight|summary)",
             r"(deep\s+)?dive\s+(into\s+)?(my\s+)?portfolio",
+            # Change/performance queries
+            r"(change|performance|return|pnl|p&l|profit|loss)\s+(in|of|for)\s+(my\s+)?portfolio",
+            r"(my\s+)?portfolio.*(change|performance|yesterday|today|week|month)",
+            r"how\s+(did|is|has|was)\s+(my\s+)?portfolio",
+            r"(what|show).*(my\s+)?portfolio.*(change|return|pnl|performance)",
         ]
 
         for pattern in portfolio_patterns:
@@ -178,7 +183,32 @@ class AgentOrchestrator:
         """
         # Check for forced agent
         if force_agent:
+            # Validate force_agent against known agent types
+            valid_agent_types = {
+                "portfolio_analysis",
+                "stock_research",
+                "market_context",
+                "watchlist",
+                "fundamental_analysis",
+            }
+            
+            if force_agent not in valid_agent_types:
+                return {
+                    "response": f"Invalid agent type '{force_agent}'. Valid types are: {', '.join(sorted(valid_agent_types))}",
+                    "used_agent": False,
+                    "agent_type": None,
+                }
+            
             result = await self.run_agent(force_agent, query)
+            
+            # Check if run_agent returned an error (agent_used is None/falsy)
+            if not result.get("agent_used"):
+                return {
+                    "response": result.get("response", "Agent execution failed"),
+                    "used_agent": False,
+                    "agent_type": None,
+                }
+            
             return {
                 "response": result["response"],
                 "used_agent": True,
@@ -212,6 +242,9 @@ AGENT_TRIGGERS = {
         "Which stock is losing the most?",
         "Show my best performers",
         "Deep dive into my portfolio",
+        "What is the change in my portfolio from yesterday?",
+        "How did my portfolio do today?",
+        "Show my portfolio performance",
     ],
     "stock_research": [
         "Tell me about Reliance",

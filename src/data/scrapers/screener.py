@@ -2,7 +2,6 @@
 
 import re
 from dataclasses import dataclass, field
-from typing import Any
 
 import httpx
 from bs4 import BeautifulSoup
@@ -192,12 +191,12 @@ class ScreenerScraper:
         text = warehouse.get_text()
 
         # Revenue growth
-        growth_match = re.search(r"Sales growth.*?(\d+\.?\d*)%", text)
+        growth_match = re.search(r"Sales growth.*?([+-]?\s*\d+\.?\d*)\s*%", text)
         if growth_match:
             data.revenue_growth_3yr = float(growth_match.group(1))
 
         # Profit growth
-        profit_match = re.search(r"Profit growth.*?(\d+\.?\d*)%", text)
+        profit_match = re.search(r"Profit growth.*?([+-]?\s*\d+\.?\d*)\s*%", text)
         if profit_match:
             data.profit_growth_3yr = float(profit_match.group(1))
 

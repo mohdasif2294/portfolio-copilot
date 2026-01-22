@@ -7,7 +7,7 @@ import warnings
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 warnings.filterwarnings("ignore", message=".*HF_TOKEN.*")
 
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer  # noqa: E402
 
 DEFAULT_MODEL = "all-MiniLM-L6-v2"
 EMBEDDING_DIM = 384

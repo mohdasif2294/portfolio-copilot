@@ -248,18 +248,28 @@ class EconomicTimesScraper:
         except ValueError:
             pass
 
-        # Try common formats
-        patterns = [
-            ("%B %d, %Y", r"(\w+ \d{1,2}, \d{4})"),
-            ("%b %d, %Y", r"(\w+ \d{1,2}, \d{4})"),
-            ("%d %b %Y", r"(\d{1,2} \w+ \d{4})"),
+        # Try common formats - extract date text once, then try formats sequentially
+        date_formats = ["%B %d, %Y", "%b %d, %Y", "%d %b %Y"]
+        
+        # Patterns to extract potential date strings
+        extraction_patterns = [
+            r"(\w+ \d{1,2}, \d{4})",  # Month name (full or abbreviated) day, year
+            r"(\d{1,2} \w+ \d{4})",   # Day month name year
         ]
-
-        for fmt, pattern in patterns:
+        
+        # Extract date text using patterns
+        extracted_date = None
+        for pattern in extraction_patterns:
             match = re.search(pattern, date_text)
             if match:
+                extracted_date = match.group(1)
+                break
+        
+        # If we found a date string, try parsing with each format sequentially
+        if extracted_date:
+            for fmt in date_formats:
                 try:
-                    return datetime.strptime(match.group(1), fmt)
+                    return datetime.strptime(extracted_date, fmt)
                 except ValueError:
                     continue
 

@@ -1,8 +1,6 @@
 """Kite MCP client using FastMCP with session persistence."""
 
 import json
-import os
-import pickle
 import re
 from dataclasses import dataclass
 from pathlib import Path

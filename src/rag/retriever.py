@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from src.rag.vector_store import SearchResult, VectorStore, get_vector_store
+from src.rag.vector_store import VectorStore, get_vector_store
 
 
 @dataclass
@@ -99,17 +99,20 @@ class NewsRetriever:
 
         context_parts = []
         total_length = 0
+        separator = "\n\n---\n\n"
 
         for r in results:
             context_str = r.to_context_string()
+            separator_length = len(separator) if context_parts else 0
+            projected_length = total_length + len(context_str) + separator_length
 
-            if total_length + len(context_str) > max_context_length:
+            if projected_length > max_context_length:
                 break
 
             context_parts.append(context_str)
-            total_length += len(context_str)
+            total_length += len(context_str) + separator_length
 
-        return "\n\n---\n\n".join(context_parts)
+        return separator.join(context_parts)
 
     def get_document_count(self) -> int:
         """Get total number of documents in store."""

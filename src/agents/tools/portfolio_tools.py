@@ -65,11 +65,11 @@ def analyze_performers(
 
     Args:
         holdings: List of holdings from Kite
-        analysis_type: "worst", "best", or "all"
-        top_n: Number of stocks to return
+        analysis_type: "worst", "best", or "all". When "all", returns the full list.
+        top_n: Number of stocks to return (ignored when analysis_type is "all")
 
     Returns:
-        List of stocks with calculated metrics
+        List of stocks with calculated metrics. Returns full list when analysis_type is "all".
     """
     if not holdings:
         return []
@@ -106,7 +106,10 @@ def analyze_performers(
         analyzed.sort(key=lambda x: x["return_pct"], reverse=True)
     # "all" keeps original order
 
-    return analyzed[:top_n]
+    if analysis_type == "all":
+        return analyzed
+    else:
+        return analyzed[:top_n]
 
 
 async def get_stock_quotes(

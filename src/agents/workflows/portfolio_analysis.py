@@ -1,15 +1,14 @@
 """Portfolio Analysis Agent workflow using LangGraph."""
 
+import operator
 import os
-from typing import Annotated, Any
+from typing import Annotated, Any, TypedDict
 
 from anthropic import Anthropic
 from dotenv import load_dotenv
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
-from langgraph.graph.message import add_messages
 
-from src.agents.state import PortfolioAnalysisState
 from src.agents.tools.news_tools import (
     ensure_news_indexed,
     get_news_context_string,
@@ -19,6 +18,27 @@ from src.agents.tools.portfolio_tools import analyze_performers, fetch_holdings
 from src.mcp.kite_client import KiteClient
 
 load_dotenv()
+
+
+# Define state schema with reducers for proper state propagation
+def replace_value(current: Any, new: Any) -> Any:
+    """Reducer that replaces the current value with the new one."""
+    return new
+
+
+class PortfolioState(TypedDict):
+    """State schema for portfolio analysis workflow."""
+
+    query: str
+    analysis_type: str
+    holdings: Annotated[list, replace_value]
+    total_value: Annotated[float, replace_value]
+    total_pnl: Annotated[float, replace_value]
+    target_stocks: Annotated[list, replace_value]
+    news_context: Annotated[list, replace_value]
+    insights: Annotated[str, replace_value]
+    error: Annotated[str | None, replace_value]
+    steps_completed: Annotated[list, operator.add]  # Accumulate steps
 
 # LLM for generating insights
 MODEL = "claude-sonnet-4-20250514"
@@ -36,29 +56,33 @@ def _get_anthropic() -> Anthropic:
 
 
 async def fetch_portfolio_node(
-    state: dict[str, Any],
+    state: PortfolioState,
     config: RunnableConfig,
 ) -> dict[str, Any]:
     """Node: Fetch portfolio holdings."""
-    client: KiteClient = config["configurable"]["kite_client"]
+    client: KiteClient | None = config.get("configurable", {}).get("kite_client")
+    if client is None:
+        raise RuntimeError(
+            "Missing required configuration: 'configurable.kite_client' must be provided"
+        )
 
     result = await fetch_holdings(client)
 
     if result["error"]:
         return {
             "error": result["error"],
-            "steps_completed": state.get("steps_completed", []) + ["fetch_portfolio"],
+            "steps_completed": ["fetch_portfolio"],
         }
 
     return {
         "holdings": result["holdings"],
         "total_value": result["total_value"],
         "total_pnl": result["total_pnl"],
-        "steps_completed": state.get("steps_completed", []) + ["fetch_portfolio"],
+        "steps_completed": ["fetch_portfolio"],
     }
 
 
-def analyze_performers_node(state: dict[str, Any]) -> dict[str, Any]:
+def analyze_performers_node(state: PortfolioState) -> dict[str, Any]:
     """Node: Identify best/worst performing stocks."""
     holdings = state.get("holdings", [])
     analysis_type = state.get("analysis_type", "worst")
@@ -66,25 +90,25 @@ def analyze_performers_node(state: dict[str, Any]) -> dict[str, Any]:
     if not holdings:
         return {
             "target_stocks": [],
-            "steps_completed": state.get("steps_completed", []) + ["analyze_performers"],
+            "steps_completed": ["analyze_performers"],
         }
 
     target_stocks = analyze_performers(holdings, analysis_type, top_n=3)
 
     return {
         "target_stocks": target_stocks,
-        "steps_completed": state.get("steps_completed", []) + ["analyze_performers"],
+        "steps_completed": ["analyze_performers"],
     }
 
 
-async def fetch_news_node(state: dict[str, Any]) -> dict[str, Any]:
+async def fetch_news_node(state: PortfolioState) -> dict[str, Any]:
     """Node: Fetch and search news for target stocks."""
     target_stocks = state.get("target_stocks", [])
 
     if not target_stocks:
         return {
             "news_context": [],
-            "steps_completed": state.get("steps_completed", []) + ["fetch_news"],
+            "steps_completed": ["fetch_news"],
         }
 
     symbols = [s["symbol"] for s in target_stocks]
@@ -97,11 +121,11 @@ async def fetch_news_node(state: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "news_context": news_articles,
-        "steps_completed": state.get("steps_completed", []) + ["fetch_news"],
+        "steps_completed": ["fetch_news"],
     }
 
 
-def generate_insights_node(state: dict[str, Any]) -> dict[str, Any]:
+def generate_insights_node(state: PortfolioState) -> dict[str, Any]:
     """Node: Generate insights using Claude."""
     holdings = state.get("holdings", [])
     target_stocks = state.get("target_stocks", [])
@@ -114,13 +138,13 @@ def generate_insights_node(state: dict[str, Any]) -> dict[str, Any]:
     if state.get("error"):
         return {
             "insights": f"Unable to analyze portfolio: {state['error']}",
-            "steps_completed": state.get("steps_completed", []) + ["generate_insights"],
+            "steps_completed": ["generate_insights"],
         }
 
     if not holdings:
         return {
             "insights": "No holdings found in your portfolio.",
-            "steps_completed": state.get("steps_completed", []) + ["generate_insights"],
+            "steps_completed": ["generate_insights"],
         }
 
     # Format data for LLM
@@ -165,18 +189,28 @@ Keep the response focused and under 300 words."""
             messages=[{"role": "user", "content": prompt}],
         )
 
-        insights = response.content[0].text
+        # Safely extract insights from response
+        if not response.content or len(response.content) == 0:
+            insights = "Error: Empty response from AI model"
+        elif not hasattr(response.content[0], "text"):
+            insights = f"Error: Unexpected response format. Expected text content, got {type(response.content[0]).__name__}"
+        else:
+            insights = response.content[0].text
 
+    except IndexError as e:
+        insights = f"Error: Response content is empty or malformed: {e}"
+    except AttributeError as e:
+        insights = f"Error: Response content missing expected 'text' attribute: {e}"
     except Exception as e:
         insights = f"Error generating insights: {e}"
 
     return {
         "insights": insights,
-        "steps_completed": state.get("steps_completed", []) + ["generate_insights"],
+        "steps_completed": ["generate_insights"],
     }
 
 
-def should_continue(state: dict[str, Any]) -> str:
+def should_continue(state: PortfolioState) -> str:
     """Determine if workflow should continue or end."""
     if state.get("error"):
         return "generate_insights"  # Go straight to insights to report error
@@ -185,8 +219,8 @@ def should_continue(state: dict[str, Any]) -> str:
 
 def create_portfolio_analysis_graph() -> StateGraph:
     """Create the Portfolio Analysis workflow graph."""
-    # Define the graph with state schema
-    workflow = StateGraph(dict)
+    # Define the graph with typed state schema for proper state propagation
+    workflow = StateGraph(PortfolioState)
 
     # Add nodes
     workflow.add_node("fetch_portfolio", fetch_portfolio_node)

@@ -1,7 +1,9 @@
 """Watchlist Suggestion Agent workflow using LangGraph."""
 
+import logging
+import operator
 import os
-from typing import Any
+from typing import Annotated, Any, TypedDict
 
 from anthropic import Anthropic
 from dotenv import load_dotenv
@@ -14,6 +16,24 @@ from src.mcp.kite_client import KiteClient
 load_dotenv()
 
 MODEL = "claude-sonnet-4-20250514"
+
+
+def replace_value(current: Any, new: Any) -> Any:
+    """Reducer that replaces the current value with the new one."""
+    return new
+
+
+class WatchlistState(TypedDict):
+    """State schema for watchlist suggestion workflow."""
+
+    query: str
+    current_holdings: Annotated[list, replace_value]
+    current_sectors: Annotated[list, replace_value]
+    opportunities: Annotated[list, replace_value]
+    news_context: Annotated[list, replace_value]
+    suggestions: Annotated[str, replace_value]
+    error: Annotated[str | None, replace_value]
+    steps_completed: Annotated[list, operator.add]
 
 # Sector mappings for Indian stocks
 STOCK_SECTORS = {
@@ -80,7 +100,7 @@ def _get_anthropic() -> Anthropic:
 
 
 async def analyze_portfolio_node(
-    state: dict[str, Any],
+    state: WatchlistState,
     config: RunnableConfig,
 ) -> dict[str, Any]:
     """Node: Analyze current portfolio holdings and sectors."""
@@ -93,7 +113,7 @@ async def analyze_portfolio_node(
             return {
                 "current_holdings": [],
                 "current_sectors": [],
-                "steps_completed": state.get("steps_completed", []) + ["analyze_portfolio"],
+                "steps_completed": ["analyze_portfolio"],
             }
 
         # Extract symbols and map to sectors
@@ -122,7 +142,7 @@ async def analyze_portfolio_node(
         return {
             "current_holdings": holding_info,
             "current_sectors": list(sectors),
-            "steps_completed": state.get("steps_completed", []) + ["analyze_portfolio"],
+            "steps_completed": ["analyze_portfolio"],
         }
 
     except Exception as e:
@@ -130,11 +150,11 @@ async def analyze_portfolio_node(
             "current_holdings": [],
             "current_sectors": [],
             "error": f"Failed to analyze portfolio: {e}",
-            "steps_completed": state.get("steps_completed", []) + ["analyze_portfolio"],
+            "steps_completed": ["analyze_portfolio"],
         }
 
 
-def identify_opportunities_node(state: dict[str, Any]) -> dict[str, Any]:
+def identify_opportunities_node(state: WatchlistState) -> dict[str, Any]:
     """Node: Identify potential stocks to watch based on sectors."""
     current_holdings = state.get("current_holdings", [])
     current_sectors = state.get("current_sectors", [])
@@ -168,18 +188,18 @@ def identify_opportunities_node(state: dict[str, Any]) -> dict[str, Any]:
     # Limit to top 10 opportunities
     return {
         "opportunities": opportunities[:10],
-        "steps_completed": state.get("steps_completed", []) + ["identify_opportunities"],
+        "steps_completed": ["identify_opportunities"],
     }
 
 
-async def fetch_news_node(state: dict[str, Any]) -> dict[str, Any]:
+async def fetch_news_node(state: WatchlistState) -> dict[str, Any]:
     """Node: Fetch news for opportunity stocks."""
     opportunities = state.get("opportunities", [])
 
     if not opportunities:
         return {
             "news_context": [],
-            "steps_completed": state.get("steps_completed", []) + ["fetch_news"],
+            "steps_completed": ["fetch_news"],
         }
 
     # Get symbols to search news for
@@ -188,19 +208,26 @@ async def fetch_news_node(state: dict[str, Any]) -> dict[str, Any]:
     # Import here to avoid circular imports
     from src.agents.tools.news_tools import ensure_news_indexed, search_stock_news
 
-    # Ensure news is indexed
-    await ensure_news_indexed(symbols)
+    try:
+        # Ensure news is indexed
+        await ensure_news_indexed(symbols)
 
-    # Search for news
-    news_articles = search_stock_news(symbols, top_k=2)
+        # Search for news
+        news_articles = search_stock_news(symbols, top_k=2)
 
-    return {
-        "news_context": news_articles,
-        "steps_completed": state.get("steps_completed", []) + ["fetch_news"],
-    }
+        return {
+            "news_context": news_articles,
+            "steps_completed": ["fetch_news"],
+        }
+    except Exception as err:
+        logging.error(f"Error fetching news for symbols {symbols}: {err}")
+        return {
+            "news_context": [],
+            "steps_completed": ["fetch_news"],
+        }
 
 
-def generate_suggestions_node(state: dict[str, Any]) -> dict[str, Any]:
+def generate_suggestions_node(state: WatchlistState) -> dict[str, Any]:
     """Node: Generate watchlist suggestions using Claude."""
     query = state.get("query", "")
     current_holdings = state.get("current_holdings", [])
@@ -211,7 +238,7 @@ def generate_suggestions_node(state: dict[str, Any]) -> dict[str, Any]:
     if state.get("error"):
         return {
             "suggestions": f"Unable to generate suggestions: {state['error']}",
-            "steps_completed": state.get("steps_completed", []) + ["generate_suggestions"],
+            "steps_completed": ["generate_suggestions"],
         }
 
     # Format current portfolio
@@ -268,11 +295,11 @@ IMPORTANT: This is NOT investment advice. Remind the user to do their own resear
 
     return {
         "suggestions": suggestions,
-        "steps_completed": state.get("steps_completed", []) + ["generate_suggestions"],
+        "steps_completed": ["generate_suggestions"],
     }
 
 
-def should_continue(state: dict[str, Any]) -> str:
+def should_continue(state: WatchlistState) -> str:
     """Determine if workflow should continue or end."""
     if state.get("error"):
         return "generate_suggestions"
@@ -281,7 +308,7 @@ def should_continue(state: dict[str, Any]) -> str:
 
 def create_watchlist_graph() -> StateGraph:
     """Create the Watchlist Suggestion workflow graph."""
-    workflow = StateGraph(dict)
+    workflow = StateGraph(WatchlistState)
 
     # Add nodes
     workflow.add_node("analyze_portfolio", analyze_portfolio_node)

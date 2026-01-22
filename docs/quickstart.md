@@ -12,7 +12,7 @@ Get Portfolio Copilot running in 5 minutes.
 
 ```bash
 # Clone the repo
-git clone https://github.com/yourusername/portfolio-copilot.git
+git clone https://github.com/mohdasif2294/portfolio-copilot.git
 cd portfolio-copilot
 
 # Install with Poetry

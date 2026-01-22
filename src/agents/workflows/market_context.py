@@ -1,7 +1,8 @@
 """Market Context Agent workflow using LangGraph."""
 
+import operator
 import os
-from typing import Any
+from typing import Annotated, Any, TypedDict
 
 from anthropic import Anthropic
 from dotenv import load_dotenv
@@ -20,6 +21,23 @@ load_dotenv()
 MODEL = "claude-sonnet-4-20250514"
 
 
+def replace_value(current: Any, new: Any) -> Any:
+    """Reducer that replaces the current value with the new one."""
+    return new
+
+
+class MarketContextState(TypedDict):
+    """State schema for market context workflow."""
+
+    query: str
+    portfolio_pnl: Annotated[dict | None, replace_value]
+    movers: Annotated[list, replace_value]
+    market_news: Annotated[list, replace_value]
+    context_report: Annotated[str, replace_value]
+    error: Annotated[str | None, replace_value]
+    steps_completed: Annotated[list, operator.add]
+
+
 def _get_anthropic() -> Anthropic:
     """Get Anthropic client."""
     api_key = os.getenv("ANTHROPIC_API_KEY")
@@ -32,7 +50,7 @@ def _get_anthropic() -> Anthropic:
 
 
 async def fetch_portfolio_pnl_node(
-    state: dict[str, Any],
+    state: MarketContextState,
     config: RunnableConfig,
 ) -> dict[str, Any]:
     """Node: Fetch portfolio and calculate today's P&L."""
@@ -44,7 +62,7 @@ async def fetch_portfolio_pnl_node(
         if not holdings:
             return {
                 "error": "No holdings found in portfolio.",
-                "steps_completed": state.get("steps_completed", []) + ["fetch_portfolio"],
+                "steps_completed": ["fetch_portfolio"],
             }
 
         # Calculate P&L metrics
@@ -72,25 +90,25 @@ async def fetch_portfolio_pnl_node(
 
         return {
             "portfolio_pnl": portfolio_pnl,
-            "steps_completed": state.get("steps_completed", []) + ["fetch_portfolio"],
+            "steps_completed": ["fetch_portfolio"],
         }
 
     except Exception as e:
         return {
             "error": f"Failed to fetch portfolio: {e}",
-            "steps_completed": state.get("steps_completed", []) + ["fetch_portfolio"],
+            "steps_completed": ["fetch_portfolio"],
         }
 
 
-def identify_movers_node(state: dict[str, Any]) -> dict[str, Any]:
+def identify_movers_node(state: MarketContextState) -> dict[str, Any]:
     """Node: Identify stocks that moved the most today."""
-    portfolio_pnl = state.get("portfolio_pnl", {})
+    portfolio_pnl = state.get("portfolio_pnl") or {}
     holdings = portfolio_pnl.get("holdings", [])
 
     if not holdings:
         return {
             "movers": [],
-            "steps_completed": state.get("steps_completed", []) + ["identify_movers"],
+            "steps_completed": ["identify_movers"],
         }
 
     # Calculate day change for each holding
@@ -119,14 +137,13 @@ def identify_movers_node(state: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "movers": top_movers,
-        "steps_completed": state.get("steps_completed", []) + ["identify_movers"],
+        "steps_completed": ["identify_movers"],
     }
 
 
-async def fetch_market_news_node(state: dict[str, Any]) -> dict[str, Any]:
+async def fetch_market_news_node(state: MarketContextState) -> dict[str, Any]:
     """Node: Fetch market and sector news."""
     movers = state.get("movers", [])
-    query = state.get("query", "")
 
     # Get symbols of top movers
     symbols = [m["symbol"] for m in movers[:3]]
@@ -172,21 +189,21 @@ async def fetch_market_news_node(state: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "market_news": unique_news[:8],
-        "steps_completed": state.get("steps_completed", []) + ["fetch_news"],
+        "steps_completed": ["fetch_news"],
     }
 
 
-def generate_context_node(state: dict[str, Any]) -> dict[str, Any]:
+def generate_context_node(state: MarketContextState) -> dict[str, Any]:
     """Node: Generate market context explanation using Claude."""
     query = state.get("query", "")
-    portfolio_pnl = state.get("portfolio_pnl", {})
+    portfolio_pnl = state.get("portfolio_pnl") or {}
     movers = state.get("movers", [])
     market_news = state.get("market_news", [])
 
     if state.get("error"):
         return {
             "context_report": f"Unable to analyze: {state['error']}",
-            "steps_completed": state.get("steps_completed", []) + ["generate_context"],
+            "steps_completed": ["generate_context"],
         }
 
     # Format portfolio summary
@@ -245,11 +262,11 @@ Keep it concise (under 350 words) and insightful."""
 
     return {
         "context_report": report,
-        "steps_completed": state.get("steps_completed", []) + ["generate_context"],
+        "steps_completed": ["generate_context"],
     }
 
 
-def should_continue(state: dict[str, Any]) -> str:
+def should_continue(state: MarketContextState) -> str:
     """Determine if workflow should continue or end."""
     if state.get("error"):
         return "generate_context"
@@ -258,7 +275,7 @@ def should_continue(state: dict[str, Any]) -> str:
 
 def create_market_context_graph() -> StateGraph:
     """Create the Market Context workflow graph."""
-    workflow = StateGraph(dict)
+    workflow = StateGraph(MarketContextState)
 
     # Add nodes
     workflow.add_node("fetch_portfolio", fetch_portfolio_pnl_node)

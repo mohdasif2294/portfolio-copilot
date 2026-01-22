@@ -179,7 +179,7 @@ if __name__ == "__main__":
     print(f"Starting ingestion for: {symbols or 'latest news'}")
     stats = asyncio.run(ingest_news(symbols))
 
-    print(f"\nIngestion complete:")
+    print("\nIngestion complete:")
     print(f"  Articles fetched: {stats.articles_fetched}")
     print(f"  Chunks created: {stats.chunks_created}")
     print(f"  Chunks stored: {stats.chunks_stored}")

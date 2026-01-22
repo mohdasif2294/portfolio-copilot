@@ -7,9 +7,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from rich.console import Console
-from rich.live import Live
 from rich.markdown import Markdown
-from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
 
@@ -180,7 +178,7 @@ async def handle_ingest(_client: KiteClient, _assistant: PortfolioAssistant) -> 
     with console.status("[bold green]Fetching and indexing news..."):
         stats = await ingest_news(symbols=symbols or None, limit=10)
 
-    console.print(f"\n[green]Ingestion complete![/green]")
+    console.print("\n[green]Ingestion complete![/green]")
     console.print(f"  Articles fetched: {stats.articles_fetched}")
     console.print(f"  Chunks stored: {stats.chunks_stored}")
 
@@ -331,7 +329,7 @@ async def handle_status(_client: KiteClient, _assistant: PortfolioAssistant) -> 
     store = get_vector_store()
     count = store.count()
 
-    console.print(f"\n[bold]Vector Store Status[/bold]")
+    console.print("\n[bold]Vector Store Status[/bold]")
     console.print(f"  Total documents: {count}")
 
     if count == 0:
@@ -360,11 +358,11 @@ async def handle_status(_client: KiteClient, _assistant: PortfolioAssistant) -> 
             console.print(f"  - {src}: {cnt}")
 
         if symbols:
-            console.print(f"\n[bold]Symbols:[/bold]")
+            console.print("\n[bold]Symbols:[/bold]")
             for sym, cnt in symbols.items():
                 console.print(f"  - {sym}: {cnt}")
 
-        console.print(f"\n[bold]Recent documents:[/bold]")
+        console.print("\n[bold]Recent documents:[/bold]")
         for i, (doc_id, content, meta) in enumerate(
             zip(results["ids"][:5], results["documents"][:5], results["metadatas"][:5])
         ):
@@ -432,33 +430,19 @@ async def handle_chat(
         console.print()
         return
 
-    # Regular Claude chat
+    # Regular Claude chat - collect full response
     response_text = ""
 
     try:
-        console.print("[bold cyan]Assistant[/bold cyan]", end="")
-
-        # Stream the response
-        with Live("", console=console, refresh_per_second=10, transient=True) as live:
+        with console.status("[bold green]Thinking..."):
             async for event in assistant.chat(user_input):
                 if event.type == "text":
                     response_text += event.text
-                    # Show markdown preview while streaming
-                    live.update(Markdown(response_text))
-                elif event.type == "tool_use":
-                    # Show tool usage indicator
-                    tool_name = event.tool_call.name if event.tool_call else "unknown"
-                    live.update(
-                        Panel(
-                            f"[dim]Calling {tool_name}...[/dim]\n\n{Markdown(response_text)}",
-                            border_style="dim",
-                        )
-                    )
                 elif event.type == "done":
                     break
 
-        # Print final response with markdown formatting
-        console.print()  # New line after "Assistant"
+        # Print response with markdown formatting
+        console.print("\n[bold cyan]Assistant[/bold cyan]")
         console.print(Markdown(response_text))
         console.print()
 

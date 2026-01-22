@@ -28,7 +28,15 @@ def chunk_by_tokens(
         chunk_size: Target words per chunk
         overlap: Words to overlap between chunks
     """
-    words = text.split()
+    # Build words list and track original character start positions
+    # Using re.finditer to capture exact positions in original text
+    words = []
+    word_start_offsets = []
+    
+    for match in re.finditer(r'\S+', text):
+        words.append(match.group())
+        word_start_offsets.append(match.start())
+    
     chunks = []
 
     if len(words) <= chunk_size:
@@ -42,8 +50,8 @@ def chunk_by_tokens(
         chunk_words = words[start:end]
         chunk_text = " ".join(chunk_words)
 
-        # Calculate character positions
-        char_start = len(" ".join(words[:start])) + (1 if start > 0 else 0)
+        # Calculate character positions using original offsets
+        char_start = word_start_offsets[start]
         char_end = char_start + len(chunk_text)
 
         chunks.append(
@@ -153,8 +161,11 @@ def chunk_by_paragraphs(text: str, max_chunk_size: int = 1024) -> list[Chunk]:
                 chunk_idx += 1
 
             # Chunk the large paragraph
+            para_start_pos = char_position
             para_chunks = chunk_by_sentences(para, max_chunk_size)
             for pc in para_chunks:
+                pc.start_idx = pc.start_idx + para_start_pos
+                pc.end_idx = pc.end_idx + para_start_pos
                 pc.chunk_idx = chunk_idx
                 chunks.append(pc)
                 chunk_idx += 1

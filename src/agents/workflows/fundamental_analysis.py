@@ -1,8 +1,9 @@
 """Fundamental Analysis Agent using screener.in data, news, and LLM synthesis."""
 
+import operator
 import os
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Annotated, Any, TypedDict
 
 from anthropic import Anthropic
 from dotenv import load_dotenv
@@ -14,12 +15,36 @@ from src.agents.tools.news_tools import (
     get_news_context_string,
     search_stock_news,
 )
+from src.agents.tools.symbol_tools import extract_symbol
 from src.data.scrapers.screener import FundamentalData, get_stock_fundamentals
 from src.mcp.kite_client import KiteClient
 
 load_dotenv()
 
 MODEL = "claude-sonnet-4-20250514"
+
+
+def replace_value(current: Any, new: Any) -> Any:
+    """Reducer that replaces the current value with the new one."""
+    return new
+
+
+class FundamentalAnalysisState(TypedDict):
+    """State schema for fundamental analysis workflow."""
+
+    query: str
+    symbol: Annotated[str, replace_value]
+    fundamentals: Annotated[Any, replace_value]  # FundamentalData
+    score: Annotated[Any, replace_value]  # FundamentalScore
+    in_portfolio: Annotated[bool, replace_value]
+    holding_qty: Annotated[int, replace_value]
+    holding_avg_price: Annotated[float, replace_value]
+    holding_pnl: Annotated[float, replace_value]
+    holding_value: Annotated[float, replace_value]
+    news_articles: Annotated[list, replace_value]
+    response: Annotated[str, replace_value]
+    error: Annotated[str | None, replace_value]
+    steps_completed: Annotated[list, operator.add]
 
 
 def _get_anthropic() -> Anthropic:
@@ -230,79 +255,6 @@ def analyze_fundamentals(data: FundamentalData) -> FundamentalScore:
     return score
 
 
-def extract_symbol_from_query(query: str) -> str | None:
-    """Extract stock symbol from user query."""
-    import re
-
-    # Common Indian stock name to symbol mapping
-    name_to_symbol = {
-        "reliance": "RELIANCE",
-        "tcs": "TCS",
-        "tata consultancy": "TCS",
-        "infosys": "INFY",
-        "infy": "INFY",
-        "hdfc bank": "HDFCBANK",
-        "hdfc": "HDFCBANK",
-        "icici bank": "ICICIBANK",
-        "icici": "ICICIBANK",
-        "sbi": "SBIN",
-        "state bank": "SBIN",
-        "wipro": "WIPRO",
-        "bharti airtel": "BHARTIARTL",
-        "airtel": "BHARTIARTL",
-        "kotak": "KOTAKBANK",
-        "kotak bank": "KOTAKBANK",
-        "axis bank": "AXISBANK",
-        "axis": "AXISBANK",
-        "itc": "ITC",
-        "larsen": "LT",
-        "l&t": "LT",
-        "asian paints": "ASIANPAINT",
-        "maruti": "MARUTI",
-        "maruti suzuki": "MARUTI",
-        "bajaj finance": "BAJFINANCE",
-        "bajaj finserv": "BAJAJFINSV",
-        "hul": "HINDUNILVR",
-        "hindustan unilever": "HINDUNILVR",
-        "sun pharma": "SUNPHARMA",
-        "tech mahindra": "TECHM",
-        "titan": "TITAN",
-        "adani ports": "ADANIPORTS",
-        "adani green": "ADANIGREEN",
-        "adani enterprises": "ADANIENT",
-        "power grid": "POWERGRID",
-        "ntpc": "NTPC",
-        "nestle": "NESTLEIND",
-        "ultratech": "ULTRACEMCO",
-        "tata motors": "TATAMOTORS",
-        "tata steel": "TATASTEEL",
-        "jio": "JIOFIN",
-        "hcl": "HCLTECH",
-        "hcl tech": "HCLTECH",
-    }
-
-    query_lower = query.lower()
-
-    # Check for known company names
-    for name, symbol in name_to_symbol.items():
-        if name in query_lower:
-            return symbol
-
-    # Look for potential symbol (all caps word of 2-15 chars)
-    words = re.findall(r"\b([A-Z]{2,15})\b", query)
-    if words:
-        return words[0]
-
-    # Look for any capitalized word that might be a stock
-    words = query.split()
-    for word in words:
-        clean = re.sub(r"[^\w]", "", word)
-        if clean and clean[0].isupper() and len(clean) >= 2:
-            return clean.upper()
-
-    return None
-
-
 def format_fundamentals_for_llm(data: FundamentalData, score: FundamentalScore) -> str:
     """Format fundamental data as context for LLM."""
     lines = []
@@ -370,58 +322,53 @@ def format_fundamentals_for_llm(data: FundamentalData, score: FundamentalScore) 
 
 # Node functions for LangGraph workflow
 
-async def extract_symbol_node(state: dict[str, Any]) -> dict[str, Any]:
+async def extract_symbol_node(state: FundamentalAnalysisState) -> dict[str, Any]:
     """Node: Extract stock symbol from query."""
     query = state.get("query", "")
     symbol = state.get("symbol", "")
 
     if not symbol:
-        symbol = extract_symbol_from_query(query)
+        symbol = extract_symbol(query)
 
     if not symbol:
         return {
-            **state,
             "error": "Could not identify stock symbol from query. Please specify a stock symbol.",
-            "steps_completed": state.get("steps_completed", []) + ["extract_symbol"],
+            "steps_completed": ["extract_symbol"],
         }
 
     return {
-        **state,
         "symbol": symbol.upper(),
-        "steps_completed": state.get("steps_completed", []) + ["extract_symbol"],
+        "steps_completed": ["extract_symbol"],
     }
 
 
-async def fetch_fundamentals_node(state: dict[str, Any]) -> dict[str, Any]:
+async def fetch_fundamentals_node(state: FundamentalAnalysisState) -> dict[str, Any]:
     """Node: Fetch fundamental data from screener.in."""
     symbol = state.get("symbol")
 
     if not symbol or state.get("error"):
         return {
-            **state,
-            "steps_completed": state.get("steps_completed", []) + ["fetch_fundamentals"],
+            "steps_completed": ["fetch_fundamentals"],
         }
 
     fundamentals = await get_stock_fundamentals(symbol)
     score = analyze_fundamentals(fundamentals) if not fundamentals.error else FundamentalScore()
 
     return {
-        **state,
         "fundamentals": fundamentals,
         "score": score,
-        "steps_completed": state.get("steps_completed", []) + ["fetch_fundamentals"],
+        "steps_completed": ["fetch_fundamentals"],
     }
 
 
-async def check_holdings_node(state: dict[str, Any], config: RunnableConfig) -> dict[str, Any]:
+async def check_holdings_node(state: FundamentalAnalysisState, config: RunnableConfig) -> dict[str, Any]:
     """Node: Check if user holds this stock."""
     client: KiteClient = config["configurable"]["kite_client"]
     symbol = state.get("symbol", "").upper()
 
     if state.get("error"):
         return {
-            **state,
-            "steps_completed": state.get("steps_completed", []) + ["check_holdings"],
+            "steps_completed": ["check_holdings"],
         }
 
     try:
@@ -429,33 +376,30 @@ async def check_holdings_node(state: dict[str, Any], config: RunnableConfig) -> 
         for h in holdings:
             if h.get("tradingsymbol", "").upper() == symbol:
                 return {
-                    **state,
                     "in_portfolio": True,
                     "holding_qty": h.get("quantity", 0),
                     "holding_avg_price": h.get("average_price", 0),
                     "holding_pnl": h.get("pnl", 0),
                     "holding_value": h.get("quantity", 0) * h.get("last_price", 0),
-                    "steps_completed": state.get("steps_completed", []) + ["check_holdings"],
+                    "steps_completed": ["check_holdings"],
                 }
     except Exception:
         pass
 
     return {
-        **state,
         "in_portfolio": False,
-        "steps_completed": state.get("steps_completed", []) + ["check_holdings"],
+        "steps_completed": ["check_holdings"],
     }
 
 
-async def fetch_news_node(state: dict[str, Any]) -> dict[str, Any]:
+async def fetch_news_node(state: FundamentalAnalysisState) -> dict[str, Any]:
     """Node: Fetch recent news about the stock."""
     symbol = state.get("symbol", "")
 
     if not symbol or state.get("error"):
         return {
-            **state,
             "news_articles": [],
-            "steps_completed": state.get("steps_completed", []) + ["fetch_news"],
+            "steps_completed": ["fetch_news"],
         }
 
     # Ensure news is indexed
@@ -465,18 +409,16 @@ async def fetch_news_node(state: dict[str, Any]) -> dict[str, Any]:
     news_articles = search_stock_news([symbol], top_k=5)
 
     return {
-        **state,
         "news_articles": news_articles,
-        "steps_completed": state.get("steps_completed", []) + ["fetch_news"],
+        "steps_completed": ["fetch_news"],
     }
 
 
-def generate_analysis_node(state: dict[str, Any]) -> dict[str, Any]:
+def generate_analysis_node(state: FundamentalAnalysisState) -> dict[str, Any]:
     """Node: Generate comprehensive analysis using Claude."""
     query = state.get("query", "")
-    symbol = state.get("symbol", "")
     fundamentals = state.get("fundamentals")
-    score = state.get("score", FundamentalScore())
+    score = state.get("score") or FundamentalScore()
     in_portfolio = state.get("in_portfolio", False)
     holding_qty = state.get("holding_qty", 0)
     holding_avg_price = state.get("holding_avg_price", 0)
@@ -487,9 +429,8 @@ def generate_analysis_node(state: dict[str, Any]) -> dict[str, Any]:
     # Handle errors
     if state.get("error"):
         return {
-            **state,
             "response": f"## Analysis Error\n\n{state['error']}",
-            "steps_completed": state.get("steps_completed", []) + ["generate_analysis"],
+            "steps_completed": ["generate_analysis"],
         }
 
     # Format holdings info
@@ -551,13 +492,12 @@ IMPORTANT: This is for informational purposes only, not financial advice."""
         analysis = f"## Analysis Error\n\nUnable to generate analysis: {e}"
 
     return {
-        **state,
         "response": analysis,
-        "steps_completed": state.get("steps_completed", []) + ["generate_analysis"],
+        "steps_completed": ["generate_analysis"],
     }
 
 
-def should_continue(state: dict[str, Any]) -> str:
+def should_continue(state: FundamentalAnalysisState) -> str:
     """Determine if workflow should continue or skip to analysis."""
     if state.get("error"):
         return "generate_analysis"
@@ -566,7 +506,7 @@ def should_continue(state: dict[str, Any]) -> str:
 
 def create_fundamental_analysis_graph() -> StateGraph:
     """Create the Fundamental Analysis workflow graph."""
-    workflow = StateGraph(dict)
+    workflow = StateGraph(FundamentalAnalysisState)
 
     # Add nodes
     workflow.add_node("extract_symbol", extract_symbol_node)

@@ -62,7 +62,7 @@ async def ensure_news_indexed(symbols: list[str]) -> dict[str, Any]:
     # Check if we have any news for these symbols
     has_news = False
     for symbol in symbols:
-        results = retriever.search(symbol, top_k=1, symbol=symbol)
+        results = retriever.search(query=symbol, top_k=1, symbol=symbol)
         if results:
             has_news = True
             break

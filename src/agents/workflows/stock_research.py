@@ -1,8 +1,9 @@
 """Stock Research Agent workflow using LangGraph."""
 
+import logging
+import operator
 import os
-import re
-from typing import Any
+from typing import Annotated, Any, TypedDict
 
 from anthropic import Anthropic
 from dotenv import load_dotenv
@@ -14,11 +15,30 @@ from src.agents.tools.news_tools import (
     get_news_context_string,
     search_stock_news,
 )
+from src.agents.tools.symbol_tools import extract_symbol
 from src.mcp.kite_client import KiteClient
 
 load_dotenv()
 
 MODEL = "claude-sonnet-4-20250514"
+
+
+def replace_value(current: Any, new: Any) -> Any:
+    """Reducer that replaces the current value with the new one."""
+    return new
+
+
+class StockResearchState(TypedDict):
+    """State schema for stock research workflow."""
+
+    query: str
+    symbol: Annotated[str, replace_value]
+    holdings_position: Annotated[dict | None, replace_value]
+    current_price: Annotated[dict | None, replace_value]
+    news_articles: Annotated[list, replace_value]
+    research_report: Annotated[str, replace_value]
+    error: Annotated[str | None, replace_value]
+    steps_completed: Annotated[list, operator.add]
 
 
 def _get_anthropic() -> Anthropic:
@@ -29,84 +49,11 @@ def _get_anthropic() -> Anthropic:
     return Anthropic(api_key=api_key)
 
 
-def extract_symbol_from_query(query: str) -> str | None:
-    """Extract stock symbol from natural language query.
-
-    Examples:
-        "Tell me about Reliance" -> "RELIANCE"
-        "Research TCS stock" -> "TCS"
-        "What's happening with INFY?" -> "INFY"
-    """
-    query_upper = query.upper()
-
-    # Common Indian stock symbols
-    known_symbols = [
-        "RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "HINDUNILVR",
-        "ITC", "SBIN", "BHARTIARTL", "KOTAKBANK", "LT", "AXISBANK",
-        "ASIANPAINT", "MARUTI", "TITAN", "SUNPHARMA", "ULTRACEMCO",
-        "WIPRO", "HCLTECH", "TECHM", "BAJFINANCE", "BAJAJFINSV",
-        "NESTLEIND", "POWERGRID", "NTPC", "ONGC", "TATASTEEL",
-        "JSWSTEEL", "COALINDIA", "ADANIENT", "ADANIPORTS", "GABRIEL",
-        "TATAMOTORS", "M&M", "HEROMOTOCO", "EICHERMOT", "BAJAJ-AUTO",
-    ]
-
-    # Check for known symbols in query
-    for symbol in known_symbols:
-        if symbol in query_upper:
-            return symbol
-
-    # Try to extract capitalized words that might be symbols
-    words = re.findall(r'\b[A-Z]{2,}(?:-[A-Z]+)?\b', query_upper)
-    for word in words:
-        if word not in ["THE", "AND", "FOR", "ABOUT", "WHAT", "TELL", "SHOW", "GET"]:
-            return word
-
-    # Try to find company names and map to symbols
-    name_to_symbol = {
-        "RELIANCE": "RELIANCE",
-        "TATA CONSULTANCY": "TCS",
-        "INFOSYS": "INFY",
-        "HDFC BANK": "HDFCBANK",
-        "ICICI BANK": "ICICIBANK",
-        "HINDUSTAN UNILEVER": "HINDUNILVR",
-        "STATE BANK": "SBIN",
-        "BHARTI AIRTEL": "BHARTIARTL",
-        "KOTAK": "KOTAKBANK",
-        "LARSEN": "LT",
-        "AXIS BANK": "AXISBANK",
-        "ASIAN PAINTS": "ASIANPAINT",
-        "MARUTI": "MARUTI",
-        "TITAN": "TITAN",
-        "SUN PHARMA": "SUNPHARMA",
-        "WIPRO": "WIPRO",
-        "HCL": "HCLTECH",
-        "TECH MAHINDRA": "TECHM",
-        "BAJAJ FINANCE": "BAJFINANCE",
-        "NESTLE": "NESTLEIND",
-        "TATA STEEL": "TATASTEEL",
-        "JSW STEEL": "JSWSTEEL",
-        "COAL INDIA": "COALINDIA",
-        "ADANI": "ADANIENT",
-        "GABRIEL": "GABRIEL",
-        "TATA MOTORS": "TATAMOTORS",
-        "MAHINDRA": "M&M",
-        "HERO": "HEROMOTOCO",
-        "EICHER": "EICHERMOT",
-        "BAJAJ AUTO": "BAJAJ-AUTO",
-    }
-
-    for name, symbol in name_to_symbol.items():
-        if name in query_upper:
-            return symbol
-
-    return None
-
-
 # Node functions
 
 
 async def extract_symbol_node(
-    state: dict[str, Any],
+    state: StockResearchState,
     config: RunnableConfig,
 ) -> dict[str, Any]:
     """Node: Extract stock symbol from query."""
@@ -116,22 +63,22 @@ async def extract_symbol_node(
     symbol = state.get("symbol", "")
 
     if not symbol:
-        symbol = extract_symbol_from_query(query)
+        symbol = extract_symbol(query)
 
     if not symbol:
         return {
             "error": "Could not identify stock symbol from query. Please specify a stock symbol.",
-            "steps_completed": state.get("steps_completed", []) + ["extract_symbol"],
+            "steps_completed": ["extract_symbol"],
         }
 
     return {
         "symbol": symbol.upper(),
-        "steps_completed": state.get("steps_completed", []) + ["extract_symbol"],
+        "steps_completed": ["extract_symbol"],
     }
 
 
 async def check_holdings_node(
-    state: dict[str, Any],
+    state: StockResearchState,
     config: RunnableConfig,
 ) -> dict[str, Any]:
     """Node: Check if user holds this stock."""
@@ -150,17 +97,17 @@ async def check_holdings_node(
 
         return {
             "holdings_position": holding,
-            "steps_completed": state.get("steps_completed", []) + ["check_holdings"],
+            "steps_completed": ["check_holdings"],
         }
-    except Exception as e:
+    except Exception:
         return {
             "holdings_position": None,
-            "steps_completed": state.get("steps_completed", []) + ["check_holdings"],
+            "steps_completed": ["check_holdings"],
         }
 
 
 async def get_price_node(
-    state: dict[str, Any],
+    state: StockResearchState,
     config: RunnableConfig,
 ) -> dict[str, Any]:
     """Node: Get current price and market data."""
@@ -181,38 +128,45 @@ async def get_price_node(
 
         return {
             "current_price": current_price,
-            "steps_completed": state.get("steps_completed", []) + ["get_price"],
+            "steps_completed": ["get_price"],
         }
-    except Exception as e:
+    except Exception:
         return {
             "current_price": None,
-            "steps_completed": state.get("steps_completed", []) + ["get_price"],
+            "steps_completed": ["get_price"],
         }
 
 
-async def fetch_news_node(state: dict[str, Any]) -> dict[str, Any]:
+async def fetch_news_node(state: StockResearchState) -> dict[str, Any]:
     """Node: Fetch news about the stock."""
     symbol = state.get("symbol", "")
 
     if not symbol:
         return {
             "news_articles": [],
-            "steps_completed": state.get("steps_completed", []) + ["fetch_news"],
+            "steps_completed": ["fetch_news"],
         }
 
-    # Ensure news is indexed
-    await ensure_news_indexed([symbol])
+    try:
+        # Ensure news is indexed
+        await ensure_news_indexed([symbol])
 
-    # Search for news
-    news_articles = search_stock_news([symbol], top_k=5)
+        # Search for news
+        news_articles = search_stock_news([symbol], top_k=5)
 
-    return {
-        "news_articles": news_articles,
-        "steps_completed": state.get("steps_completed", []) + ["fetch_news"],
-    }
+        return {
+            "news_articles": news_articles,
+            "steps_completed": ["fetch_news"],
+        }
+    except Exception as e:
+        logging.error(f"Error fetching news for {symbol}: {e}")
+        return {
+            "news_articles": [],
+            "steps_completed": ["fetch_news"],
+        }
 
 
-def generate_report_node(state: dict[str, Any]) -> dict[str, Any]:
+def generate_report_node(state: StockResearchState) -> dict[str, Any]:
     """Node: Generate research report using Claude."""
     symbol = state.get("symbol", "")
     query = state.get("query", "")
@@ -223,7 +177,7 @@ def generate_report_node(state: dict[str, Any]) -> dict[str, Any]:
     if state.get("error"):
         return {
             "research_report": f"Unable to research: {state['error']}",
-            "steps_completed": state.get("steps_completed", []) + ["generate_report"],
+            "steps_completed": ["generate_report"],
         }
 
     # Format holdings info
@@ -282,18 +236,28 @@ Keep it concise (under 300 words) and actionable."""
             messages=[{"role": "user", "content": prompt}],
         )
 
-        report = response.content[0].text
+        if not response.content or len(response.content) == 0:
+            logging.error(
+                f"Empty response content from Anthropic API for symbol {symbol}. "
+                "Response content is empty or None."
+            )
+            report = (
+                f"Error generating report: Received empty response from AI model. "
+                f"Unable to generate research report for {symbol}."
+            )
+        else:
+            report = response.content[0].text
 
     except Exception as e:
         report = f"Error generating report: {e}"
 
     return {
         "research_report": report,
-        "steps_completed": state.get("steps_completed", []) + ["generate_report"],
+        "steps_completed": ["generate_report"],
     }
 
 
-def should_continue(state: dict[str, Any]) -> str:
+def should_continue(state: StockResearchState) -> str:
     """Determine if workflow should continue or end."""
     if state.get("error"):
         return "generate_report"
@@ -302,7 +266,7 @@ def should_continue(state: dict[str, Any]) -> str:
 
 def create_stock_research_graph() -> StateGraph:
     """Create the Stock Research workflow graph."""
-    workflow = StateGraph(dict)
+    workflow = StateGraph(StockResearchState)
 
     # Add nodes
     workflow.add_node("extract_symbol", extract_symbol_node)
