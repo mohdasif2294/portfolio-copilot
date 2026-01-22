@@ -301,17 +301,3 @@ def normalize_symbol(symbol: str) -> str:
     symbol = re.sub(r"\.NS$|\.BO$", "", symbol)
 
     return symbol
-
-
-def format_instrument(symbol: str, exchange: str = "NSE") -> str:
-    """Format symbol as exchange:symbol for Kite API.
-
-    Args:
-        symbol: Stock symbol
-        exchange: Exchange code (default: NSE)
-
-    Returns:
-        Formatted instrument like "NSE:RELIANCE"
-    """
-    symbol = normalize_symbol(symbol)
-    return f"{exchange}:{symbol}"

@@ -31,8 +31,6 @@ Add your API keys:
 
 ```bash
 ANTHROPIC_API_KEY=sk-ant-api03-xxxxx
-KITE_API_KEY=your_kite_api_key
-KITE_API_SECRET=your_kite_api_secret
 ```
 
 ## Step 3: Run

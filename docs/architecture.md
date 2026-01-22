@@ -397,8 +397,6 @@ workflow.add_conditional_edges(
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `ANTHROPIC_API_KEY` | Yes | Claude API key |
-| `KITE_API_KEY` | Yes | Zerodha API key |
-| `KITE_API_SECRET` | Yes | Zerodha API secret |
 
 ### Model Configuration
 

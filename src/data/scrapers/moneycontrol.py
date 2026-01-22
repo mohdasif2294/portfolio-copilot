@@ -235,18 +235,3 @@ class MoneyControlScraper:
                             continue
 
         return None
-
-
-async def fetch_moneycontrol_news(
-    query: str | None = None, limit: int = 10
-) -> list[NewsArticle]:
-    """Convenience function to fetch news.
-
-    Args:
-        query: Optional search query (stock symbol or keyword)
-        limit: Maximum articles to fetch
-    """
-    async with MoneyControlScraper() as scraper:
-        if query:
-            return await scraper.search_news(query, limit)
-        return await scraper.get_latest_news(limit)

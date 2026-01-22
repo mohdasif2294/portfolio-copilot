@@ -1,11 +1,9 @@
 """Indian stock market news scrapers."""
 
-from src.data.scrapers.economictimes import EconomicTimesScraper, fetch_et_news
-from src.data.scrapers.moneycontrol import MoneyControlScraper, fetch_moneycontrol_news
+from src.data.scrapers.economictimes import EconomicTimesScraper
+from src.data.scrapers.moneycontrol import MoneyControlScraper
 
 __all__ = [
     "MoneyControlScraper",
     "EconomicTimesScraper",
-    "fetch_moneycontrol_news",
-    "fetch_et_news",
 ]

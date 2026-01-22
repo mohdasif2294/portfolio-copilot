@@ -110,25 +110,3 @@ def analyze_performers(
         return analyzed
     else:
         return analyzed[:top_n]
-
-
-async def get_stock_quotes(
-    client: KiteClient,
-    symbols: list[str],
-) -> dict[str, Any]:
-    """Get current quotes for stocks.
-
-    Args:
-        client: Kite MCP client
-        symbols: List of stock symbols
-
-    Returns:
-        Dict mapping symbol to quote data
-    """
-    try:
-        # Format symbols for Kite API
-        instruments = [f"NSE:{sym}" for sym in symbols]
-        quotes = await client.get_quotes(instruments)
-        return {"quotes": quotes, "error": None}
-    except Exception as e:
-        return {"quotes": {}, "error": str(e)}
