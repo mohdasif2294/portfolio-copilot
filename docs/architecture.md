@@ -12,7 +12,8 @@ Portfolio Copilot is a multi-agent AI system that combines:
 
 ### 1. User Interface Layer (`src/ui/`)
 
-Portfolio Copilot provides two interfaces: a web UI and a CLI.
+Portfolio Copilot provides two interfaces: a
+ web UI and a CLI.
 
 #### Web UI (`src/ui/streamlit_app.py`)
 

@@ -35,7 +35,6 @@ ANTHROPIC_API_KEY=sk-ant-api03-xxxxx
 
 ## Step 3: Run
 
-<<<<<<< HEAD
 Choose your preferred interface:
 
 ### Option A: Web Interface (Recommended)
@@ -68,14 +67,6 @@ Terminal-based interface for command-line users.
 3. Click "Verify Login" to confirm
 
 ### CLI Interface
-=======
-```bash
-poetry run python -m src.ui.cli
-```
-
-## Step 4: Login to Kite
-
->>>>>>> main
 ```
 Portfolio Copilot
 Type 'help' for commands, or ask me about your portfolio!
@@ -119,7 +110,6 @@ You> Suggest stocks for my watchlist
 
 ## Quick Commands Reference
 
-<<<<<<< HEAD
 ### Make Commands
 
 | Command | What it does |
@@ -131,8 +121,6 @@ You> Suggest stocks for my watchlist
 
 ### CLI Commands
 
-=======
->>>>>>> main
 | Command | What it does |
 |---------|--------------|
 | `login` | Connect to Zerodha |
@@ -181,17 +169,12 @@ Search query: TCS quarterly results
 ## Troubleshooting
 
 ### "Not logged in" error
-<<<<<<< HEAD
 - **Web UI**: Click "Connect to Kite" in the sidebar
 - **CLI**: Run `login` command first
-=======
-Run `login` command first.
->>>>>>> main
 
 ### "ANTHROPIC_API_KEY not set"
 Check your `.env` file has the correct API key.
 
-<<<<<<< HEAD
 ### Web UI shows "AI service experiencing high demand"
 The Anthropic API is temporarily overloaded. Wait a few seconds and try again.
 
@@ -200,10 +183,6 @@ The Kite MCP server may be slow. The app has built-in timeouts (15s) and will lo
 
 ### News search returns empty
 Run `ingest` (CLI) or use the sidebar action (Web UI) to index news first.
-=======
-### News search returns empty
-Run `ingest` to index news first.
->>>>>>> main
 
 ### Screener.in data missing
 Some smaller stocks may not be on screener.in.
