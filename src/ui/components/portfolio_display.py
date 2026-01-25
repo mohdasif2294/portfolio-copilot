@@ -8,6 +8,34 @@ from src.ui.utils.async_bridge import run_async
 from src.ui.utils.session import SessionManager
 
 
+def _format_currency(value: float | None) -> str:
+    """Format a numeric value as currency with ₹ symbol.
+    
+    Args:
+        value: The numeric value to format, may be None or NaN
+        
+    Returns:
+        Formatted currency string (₹X,XXX.XX) or "-" if value is missing
+    """
+    if pd.isna(value) or value is None:
+        return "-"
+    return f"₹{value:,.2f}"
+
+
+def _format_percentage(value: float | None) -> str:
+    """Format a numeric value as percentage with +/- sign.
+    
+    Args:
+        value: The numeric value to format, may be None or NaN
+        
+    Returns:
+        Formatted percentage string (+X.XX% or -X.XX%) or "-" if value is missing
+    """
+    if pd.isna(value) or value is None:
+        return "-"
+    return f"{value:+.2f}%"
+
+
 def render_portfolio_summary(kite_client: KiteClient) -> None:
     """Render portfolio summary metrics in the sidebar.
 
@@ -133,17 +161,13 @@ def render_holdings_table(kite_client: KiteClient) -> None:
 
         # Format numeric columns
         if "Avg Price" in df_display.columns:
-            df_display["Avg Price"] = df_display["Avg Price"].apply(
-                lambda x: f"₹{x:,.2f}"
-            )
+            df_display["Avg Price"] = df_display["Avg Price"].apply(_format_currency)
         if "LTP" in df_display.columns:
-            df_display["LTP"] = df_display["LTP"].apply(lambda x: f"₹{x:,.2f}")
+            df_display["LTP"] = df_display["LTP"].apply(_format_currency)
         if "P&L" in df_display.columns:
-            df_display["P&L"] = df_display["P&L"].apply(lambda x: f"₹{x:,.2f}")
+            df_display["P&L"] = df_display["P&L"].apply(_format_currency)
         if "Change %" in df_display.columns:
-            df_display["Change %"] = df_display["Change %"].apply(
-                lambda x: f"{x:+.2f}%"
-            )
+            df_display["Change %"] = df_display["Change %"].apply(_format_percentage)
 
         st.dataframe(df_display, use_container_width=True, hide_index=True)
 

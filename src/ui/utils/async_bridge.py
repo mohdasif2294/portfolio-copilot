@@ -10,25 +10,34 @@ T = TypeVar("T")
 # Background thread with its own event loop for async operations
 _loop: asyncio.AbstractEventLoop | None = None
 _thread: threading.Thread | None = None
+_loop_lock = threading.Lock()
 
 
 def _start_background_loop() -> asyncio.AbstractEventLoop:
     """Start a background thread with an event loop."""
     global _loop, _thread
 
+    # First check (fast path) - no lock needed if already initialized
     if _loop is not None and _thread is not None and _thread.is_alive():
         return _loop
 
-    _loop = asyncio.new_event_loop()
+    # Acquire lock for the check-and-create sequence
+    with _loop_lock:
+        # Double-check after acquiring lock
+        if _loop is not None and _thread is not None and _thread.is_alive():
+            return _loop
 
-    def run_loop():
-        asyncio.set_event_loop(_loop)
-        _loop.run_forever()
+        # Create new loop and thread while holding the lock
+        _loop = asyncio.new_event_loop()
 
-    _thread = threading.Thread(target=run_loop, daemon=True)
-    _thread.start()
+        def run_loop():
+            asyncio.set_event_loop(_loop)
+            _loop.run_forever()
 
-    return _loop
+        _thread = threading.Thread(target=run_loop, daemon=True)
+        _thread.start()
+
+        return _loop
 
 
 def run_async(coro: Coroutine[Any, Any, T], timeout: float | None = 30.0) -> T:
