@@ -10,9 +10,50 @@ Portfolio Copilot is a multi-agent AI system that combines:
 
 ## Component Architecture
 
-### 1. CLI Layer (`src/ui/cli.py`)
+### 1. User Interface Layer (`src/ui/`)
 
-The entry point for user interaction using Rich library.
+Portfolio Copilot provides two interfaces: a
+ web UI and a CLI.
+
+#### Web UI (`src/ui/streamlit_app.py`)
+
+A Streamlit-based web interface for browser-based interaction.
+
+```python
+# Main entry point
+def main():
+    SessionManager.initialize()
+    kite_client = get_kite_client()      # Cached connection
+    assistant = get_assistant(kite_client)
+    orchestrator = get_orchestrator(kite_client)
+
+    render_sidebar(kite_client)          # Login, quick actions
+    render_main_content(...)             # Chat interface
+```
+
+**Components:**
+- `components/chat.py` - Chat interface with message history
+- `components/sidebar.py` - Login status, quick actions
+- `components/login.py` - Kite OAuth flow
+- `components/suggested_prompts.py` - Clickable prompt suggestions
+- `utils/session.py` - Session state management
+- `utils/async_bridge.py` - Sync/async bridge with timeout handling
+
+**Features:**
+- Suggested prompts for quick start
+- Real-time chat with streaming responses
+- Sidebar for Kite login and quick actions
+- Graceful error handling with user-friendly messages
+- Connection timeouts to prevent infinite loading
+
+**Running:**
+```bash
+make web  # Opens http://localhost:8501
+```
+
+#### CLI (`src/ui/cli.py`)
+
+A Rich-powered terminal interface for command-line users.
 
 ```python
 # Main loop
@@ -32,6 +73,11 @@ async def async_main():
 - Command routing
 - Response rendering (Markdown via Rich)
 - Session management
+
+**Running:**
+```bash
+make cli
+```
 
 ### 2. Agent Orchestrator (`src/agents/orchestrator.py`)
 

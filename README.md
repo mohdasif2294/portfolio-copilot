@@ -37,8 +37,21 @@ ANTHROPIC_API_KEY=sk-ant-xxx
 
 ### Run
 
+**Web Interface (Recommended)**
+
 ```bash
-poetry run python -m src.ui.cli
+make web
+```
+
+Opens a Streamlit web app at http://localhost:8501 with:
+- Chat interface with suggested prompts
+- Sidebar for Kite login and quick actions
+- Real-time streaming responses
+
+**CLI Interface**
+
+```bash
+make cli
 ```
 
 ```
@@ -92,7 +105,13 @@ You> Suggest stocks for my watchlist
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    CLI Interface (Rich)                      │
+│              User Interface Layer                            │
+│  ┌─────────────────────┐    ┌─────────────────────┐         │
+│  │  Web UI (Streamlit) │    │   CLI (Rich)        │         │
+│  │  - Chat interface   │    │   - Commands        │         │
+│  │  - Suggested prompts│    │   - REPL interface  │         │
+│  │  - Login sidebar    │    │                     │         │
+│  └─────────────────────┘    └─────────────────────┘         │
 └──────────────────────────┬──────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
@@ -135,6 +154,7 @@ You> Suggest stocks for my watchlist
 | Vector Database | ChromaDB |
 | Embeddings | Sentence Transformers (all-MiniLM-L6-v2) |
 | Broker Integration | Zerodha Kite MCP |
+| Web UI | Streamlit |
 | CLI | Rich |
 | Web Scraping | BeautifulSoup4, httpx |
 

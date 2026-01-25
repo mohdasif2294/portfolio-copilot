@@ -86,15 +86,26 @@ class KiteClient:
 
     async def _call_tool(self, tool_name: str, args: dict | None = None) -> str:
         """Call an MCP tool and return the text result."""
-        await self.connect()
-        try:
-            result = await self._client.call_tool(tool_name, args or {})
-            return extract_text(result)
-        except ToolError as e:
-            if "log in first" in str(e).lower() or "session" in str(e).lower():
-                self._logged_in = False
-                raise AuthenticationError("Not logged in. Run 'login' first.") from e
-            raise
+        # Try to call, reconnecting if needed
+        for attempt in range(2):
+            try:
+                await self.connect()
+                result = await self._client.call_tool(tool_name, args or {})
+                return extract_text(result)
+            except ToolError as e:
+                if "log in first" in str(e).lower() or "session" in str(e).lower():
+                    self._logged_in = False
+                    raise AuthenticationError("Not logged in. Run 'login' first.") from e
+                raise
+            except Exception as e:
+                # Connection might be stale, force reconnect on first attempt
+                if attempt == 0 and "not connected" in str(e).lower():
+                    self._connected = False
+                    self._client = None
+                    continue
+                raise
+        # Should not reach here, but just in case
+        raise RuntimeError("Failed to call tool after retries")
 
     async def is_logged_in(self) -> bool:
         """Check if the user is currently logged in.

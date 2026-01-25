@@ -177,41 +177,57 @@ NAME_TO_SYMBOL: dict[str, str] = {
 
 # Words to ignore when extracting symbols
 STOPWORDS = {
-    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-    "have", "has", "had", "do", "does", "did", "will", "would", "could",
-    "should", "may", "might", "must", "shall", "can", "need", "dare",
-    "ought", "used", "to", "of", "in", "for", "on", "with", "at", "by",
-    "from", "up", "about", "into", "over", "after", "beneath", "under",
-    "above", "and", "but", "or", "nor", "so", "yet", "both", "either",
-    "neither", "not", "only", "own", "same", "than", "too", "very",
-    "just", "also", "now", "here", "there", "when", "where", "why",
-    "how", "all", "each", "every", "both", "few", "more", "most",
-    "other", "some", "such", "no", "any", "what", "which", "who",
-    "whom", "this", "that", "these", "those", "am", "i", "me", "my",
-    "myself", "we", "our", "ours", "ourselves", "you", "your", "yours",
-    "yourself", "yourselves", "he", "him", "his", "himself", "she",
-    "her", "hers", "herself", "it", "its", "itself", "they", "them",
-    "their", "theirs", "themselves", "tell", "show", "get", "give",
-    "make", "go", "know", "take", "see", "come", "think", "look",
-    "want", "use", "find", "give", "tell", "ask", "work", "seem",
-    "feel", "try", "leave", "call", "good", "bad", "buy", "sell",
-    "hold", "stock", "stocks", "share", "shares", "investment",
-    "invest", "investing", "analysis", "analyze", "research",
-    "fundamentals", "fundamental", "about", "regarding", "portfolio",
-    "market", "price", "value", "growth", "recommend", "recommendation",
-    "suggest", "opinion", "view", "thoughts", "please", "thanks",
-    "thank", "help", "me", "us", "today", "yesterday", "tomorrow",
-    "nse", "bse", "exchange", "sensex", "nifty",
+    # Articles and determiners
+    "a", "an", "the", "all", "any", "each", "every", "few", "more", "most",
+    "no", "other", "some", "such", "this", "that", "these", "those",
+    # Auxiliary verbs
+    "am", "are", "be", "been", "being", "can", "could", "dare", "did",
+    "do", "does", "had", "has", "have", "may", "might", "must", "need",
+    "ought", "shall", "should", "used", "was", "were", "will", "would",
+    # Prepositions
+    "about", "above", "after", "at", "beneath", "by", "for", "from", "in",
+    "into", "of", "on", "over", "regarding", "to", "under", "up", "with",
+    # Conjunctions
+    "and", "but", "either", "neither", "nor", "or", "so", "yet",
+    # Adverbs and modifiers
+    "also", "how", "just", "now", "only", "same", "than", "too", "very",
+    "when", "where", "why",
+    # Pronouns
+    "he", "her", "hers", "herself", "him", "himself", "his", "i", "it",
+    "its", "itself", "me", "my", "myself", "our", "ours", "ourselves",
+    "she", "their", "theirs", "themselves", "them", "they", "us", "we",
+    "you", "your", "yours", "yourself", "yourselves",
+    # Interrogatives
+    "what", "which", "who", "whom",
+    # Common verbs
+    "ask", "call", "come", "feel", "find", "get", "give", "go", "know",
+    "leave", "look", "make", "seem", "see", "show", "take", "tell",
+    "think", "try", "use", "want", "work",
+    # Adjectives
+    "bad", "good",
+    # Financial/stock-related words
+    "analysis", "analyze", "fundamental", "fundamentals",
+    "growth", "hold", "invest", "investing", "investment", "market",
+    "opinion", "portfolio", "price", "recommend", "recommendation",
+    "research", "sell", "share", "shares", "stock", "stocks", "suggest",
+    "thoughts", "value", "view",
+    # Time-related words
+    "here", "there", "today", "tomorrow", "yesterday",
+    # Exchange-related words
+    "bse", "exchange", "nifty", "nse", "sensex",
+    # Politeness and common phrases
+    "help", "please", "thank", "thanks",
 }
 
 
 def extract_symbol(query: str) -> str | None:
     """Extract stock symbol from natural language query.
 
-    This function tries multiple strategies:
-    1. Check known company name mappings (case-insensitive)
-    2. Look for uppercase words that might be symbols
-    3. Look for any word that could be a symbol (not a stopword)
+    This function tries multiple strategies in order:
+    Strategy 0: Exchange pattern matching (e.g., "NSE:INFY", "BSE:TCS")
+    Strategy 1: Known company name mappings (case-insensitive)
+    Strategy 2: Uppercase word detection (matches uppercase words that look like symbols)
+    Strategy 3: Non-stopword fallback (any word that's not a stopword and looks like a symbol)
 
     Args:
         query: Natural language query like "Is Reliance a good buy?"
@@ -228,6 +244,8 @@ def extract_symbol(query: str) -> str | None:
         'PAYTM'
         >>> extract_symbol("is gabriel good")
         'GABRIEL'
+        >>> extract_symbol("check NSE:INFY")
+        'INFY'
     """
     if not query:
         return None

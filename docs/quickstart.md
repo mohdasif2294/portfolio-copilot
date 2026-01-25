@@ -35,12 +35,38 @@ ANTHROPIC_API_KEY=sk-ant-api03-xxxxx
 
 ## Step 3: Run
 
+Choose your preferred interface:
+
+### Option A: Web Interface (Recommended)
+
 ```bash
-poetry run python -m src.ui.cli
+make web
 ```
+
+This opens a Streamlit web app at http://localhost:8501.
+
+**Features:**
+- Chat interface with suggested prompts
+- Sidebar for login and quick actions
+- Click-to-use prompt suggestions
+- Clean, modern UI
+
+### Option B: CLI Interface
+
+```bash
+make cli
+```
+
+Terminal-based interface for command-line users.
 
 ## Step 4: Login to Kite
 
+### Web Interface
+1. Click "Connect to Kite" in the sidebar
+2. Complete login in the browser popup
+3. Click "Verify Login" to confirm
+
+### CLI Interface
 ```
 Portfolio Copilot
 Type 'help' for commands, or ask me about your portfolio!
@@ -83,6 +109,17 @@ You> Suggest stocks for my watchlist
 ```
 
 ## Quick Commands Reference
+
+### Make Commands
+
+| Command | What it does |
+|---------|--------------|
+| `make web` | Run the Streamlit web interface |
+| `make cli` | Run the CLI interface |
+| `make ingest` | Index news into vector store |
+| `make help` | Show all available commands |
+
+### CLI Commands
 
 | Command | What it does |
 |---------|--------------|
@@ -132,13 +169,20 @@ Search query: TCS quarterly results
 ## Troubleshooting
 
 ### "Not logged in" error
-Run `login` command first.
+- **Web UI**: Click "Connect to Kite" in the sidebar
+- **CLI**: Run `login` command first
 
 ### "ANTHROPIC_API_KEY not set"
 Check your `.env` file has the correct API key.
 
+### Web UI shows "AI service experiencing high demand"
+The Anthropic API is temporarily overloaded. Wait a few seconds and try again.
+
+### Web UI stuck loading
+The Kite MCP server may be slow. The app has built-in timeouts (15s) and will load with a "Not connected" status. Try reconnecting via the sidebar.
+
 ### News search returns empty
-Run `ingest` to index news first.
+Run `ingest` (CLI) or use the sidebar action (Web UI) to index news first.
 
 ### Screener.in data missing
 Some smaller stocks may not be on screener.in.
