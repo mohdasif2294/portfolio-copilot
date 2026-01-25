@@ -3,6 +3,25 @@
 An AI-powered portfolio analysis assistant for Zerodha Kite users, built to learn MCP + LLM + RAG + Agentic AI fundamentals.
 Ask questions about your portfolio in plain English and get intelligent analysis powered by Claude.
 
+## Table of Contents
+
+- [What It Does](#what-it-does)
+- [Screenshots](#screenshots)
+  - [Web Interface](#web-interface-streamlit)
+  - [CLI Interface](#cli-interface-rich)
+- [Quick Start](#quick-start)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+  - [Run](#run)
+- [Usage](#usage)
+  - [Commands](#commands)
+  - [Natural Language](#natural-language)
+- [Agents](#agents)
+- [Architecture](#architecture)
+- [Tech Stack](#tech-stack)
+- [Disclaimer](#disclaimer)
+- [License](#license)
+
 ## What It Does
 
 - **Portfolio Analysis** - Identify your best/worst performers with context
