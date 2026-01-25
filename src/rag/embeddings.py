@@ -1,11 +1,33 @@
 """Embedding generation using Sentence Transformers."""
 
+import logging
 import os
 import warnings
 
-# Suppress HuggingFace token warning for local use
+# Suppress HuggingFace/transformers noise before importing
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
+
+# Suppress various warnings
 warnings.filterwarnings("ignore", message=".*HF_TOKEN.*")
+warnings.filterwarnings("ignore", message=".*unauthenticated.*")
+warnings.filterwarnings("ignore", message=".*LOAD REPORT.*")
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning, module="transformers")
+
+# Suppress transformers/sentence-transformers logging noise
+logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+logging.getLogger("transformers").setLevel(logging.ERROR)
+logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
+logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+
+# Import with suppressed output
+import transformers  # noqa: E402
+
+transformers.logging.set_verbosity_error()
 
 from sentence_transformers import SentenceTransformer  # noqa: E402
 

@@ -11,6 +11,20 @@ Ask questions about your portfolio in plain English and get intelligent analysis
 - **Fundamental Analysis** - Buy/hold/sell recommendations using screener.in data
 - **Watchlist Suggestions** - Discover stocks based on your investment style
 
+## Screenshots
+
+### Web Interface (Streamlit)
+
+![Web UI Screenshot](docs/images/web-ui.png)
+
+*Chat interface with suggested prompts, Kite login sidebar, and real-time responses*
+
+### CLI Interface (Rich)
+
+![CLI Screenshot](docs/images/cli.png)
+
+*Terminal-based interface with rich formatting and command support*
+
 ## Quick Start
 
 ### Prerequisites
