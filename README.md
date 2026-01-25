@@ -1,116 +1,72 @@
 # Portfolio Copilot
 
-An AI-powered portfolio analysis assistant for Zerodha Kite users, built to learn MCP + LLM + RAG + Agentic AI fundamentals.
-Ask questions about your portfolio in plain English and get intelligent analysis powered by Claude.
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+[![Anthropic Claude](https://img.shields.io/badge/LLM-Claude%20Sonnet%204-orange.svg)](https://www.anthropic.com/)
+[![Zerodha Kite](https://img.shields.io/badge/Broker-Zerodha%20Kite-red.svg)](https://kite.zerodha.com/)
+
+> Ask questions about your portfolio in plain English. Get intelligent analysis powered by Claude.
+
+![Web UI Screenshot](docs/images/web-ui.png)
+
+## Features
+
+| | Feature | Description |
+|---|---------|-------------|
+| 📊 | **Portfolio Analysis** | Identify your best/worst performers with news context |
+| 🔍 | **Stock Research** | Get comprehensive research on any stock |
+| 📈 | **Market Context** | Understand why your portfolio moved today |
+| 💰 | **Fundamental Analysis** | Buy/hold/sell recommendations using screener.in data |
+| 👀 | **Watchlist Suggestions** | Discover stocks based on your investment style |
+
+## Quick Start
+
+```bash
+# Clone and install
+git clone https://github.com/mohdasif2294/portfolio-copilot.git
+cd portfolio-copilot
+poetry install
+
+# Configure
+cp .env.example .env
+# Add your ANTHROPIC_API_KEY to .env
+
+# Run
+make web    # Web interface at http://localhost:8501
+# or
+make cli    # Terminal interface
+```
+
+**Prerequisites:** Python 3.12+, [Poetry](https://python-poetry.org/docs/#installation), [Anthropic API key](https://console.anthropic.com/)
+
+---
 
 ## Table of Contents
 
-- [What It Does](#what-it-does)
-- [Screenshots](#screenshots)
-  - [Web Interface](#web-interface-streamlit)
-  - [CLI Interface](#cli-interface-rich)
+- [Features](#features)
 - [Quick Start](#quick-start)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Run](#run)
+- [Screenshots](#screenshots)
 - [Usage](#usage)
-  - [Commands](#commands)
-  - [Natural Language](#natural-language)
 - [Agents](#agents)
 - [Architecture](#architecture)
 - [Tech Stack](#tech-stack)
-- [Disclaimer](#disclaimer)
 - [License](#license)
-
-## What It Does
-
-- **Portfolio Analysis** - Identify your best/worst performers with context
-- **Stock Research** - Get comprehensive research on any stock
-- **Market Context** - Understand why your portfolio moved
-- **Fundamental Analysis** - Buy/hold/sell recommendations using screener.in data
-- **Watchlist Suggestions** - Discover stocks based on your investment style
 
 ## Screenshots
 
-### Web Interface (Streamlit)
+### Web Interface
 
 ![Web UI Screenshot](docs/images/web-ui.png)
 
 *Chat interface with suggested prompts, Kite login sidebar, and real-time responses*
 
-### CLI Interface (Rich)
+### CLI Interface
 
 ![CLI Screenshot](docs/images/cli.png)
 
 *Terminal-based interface with rich formatting and command support*
 
-## Quick Start
-
-### Prerequisites
-
-- Python 3.12+
-- [Poetry](https://python-poetry.org/docs/#installation)
-- Zerodha Kite account
-- [Anthropic API key](https://console.anthropic.com/)
-
-### Installation
-
-```bash
-git clone https://github.com/mohdasif2294/portfolio-copilot.git
-cd portfolio-copilot
-poetry install
-cp .env.example .env
-```
-
-Add your Anthropic API key to `.env`:
-
-```bash
-ANTHROPIC_API_KEY=sk-ant-xxx
-```
-
-### Run
-
-**Web Interface (Recommended)**
-
-```bash
-make web
-```
-
-Opens a Streamlit web app at http://localhost:8501 with:
-- Chat interface with suggested prompts
-- Sidebar for Kite login and quick actions
-- Real-time streaming responses
-
-**CLI Interface**
-
-```bash
-make cli
-```
-
-```
-Portfolio Copilot
-Type 'help' for commands, or ask me about your portfolio!
-
-You> login                              # Connect to Zerodha
-You> holdings                           # View portfolio table
-You> Is TCS a good buy?                 # Fundamental analysis
-You> Why is my portfolio down today?    # Market context
-You> Tell me about Reliance             # Stock research
-```
-
 ## Usage
-
-### Commands
-
-| Command | Description |
-|---------|-------------|
-| `login` | Connect to your Zerodha account |
-| `holdings` | View portfolio table |
-| `analyze` | Portfolio analysis |
-| `research` | Stock research |
-| `fundamentals` | Fundamental analysis |
-| `ingest` | Index news articles |
-| `help` | Show all commands |
 
 ### Natural Language
 
@@ -124,15 +80,29 @@ You> Is TCS a good buy?
 You> Suggest stocks for my watchlist
 ```
 
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `login` | Connect to your Zerodha account |
+| `holdings` | View portfolio table |
+| `analyze` | Portfolio analysis |
+| `research` | Stock research |
+| `fundamentals` | Fundamental analysis |
+| `ingest` | Index news articles |
+| `help` | Show all commands |
+
 ## Agents
 
-| Agent | Purpose |
-|-------|---------|
-| **Portfolio Analysis** | Analyzes holdings, identifies best/worst performers, fetches relevant news |
-| **Stock Research** | Researches individual stocks with price data, news, and your position |
-| **Market Context** | Explains why your portfolio moved using market news and trends |
-| **Watchlist Suggestion** | Recommends stocks based on your current sectors and blue chips |
-| **Fundamental Analysis** | Evaluates stocks using screener.in metrics (P/E, ROE, debt) with buy/hold/sell scores |
+The system uses specialized AI agents for different tasks:
+
+| Agent | What It Does |
+|-------|--------------|
+| 📊 **Portfolio Analysis** | Analyzes holdings, identifies best/worst performers, fetches relevant news |
+| 🔍 **Stock Research** | Researches individual stocks with price data, news, and your position |
+| 📈 **Market Context** | Explains why your portfolio moved using market news and trends |
+| 👀 **Watchlist Suggestion** | Recommends stocks based on your current sectors and blue chips |
+| 💰 **Fundamental Analysis** | Evaluates stocks using screener.in metrics (P/E, ROE, debt) with buy/hold/sell scores |
 
 ## Architecture
 
@@ -191,10 +161,18 @@ You> Suggest stocks for my watchlist
 | CLI | Rich |
 | Web Scraping | BeautifulSoup4, httpx |
 
-## Disclaimer
+## Why This Project?
 
-This tool is for **educational purposes only**. It is NOT investment advice. Always consult a qualified financial advisor before making investment decisions.
+This is a learning project to understand modern AI systems:
+- **MCP (Model Context Protocol)** - Broker data integration
+- **RAG (Retrieval Augmented Generation)** - News context
+- **LangGraph** - Agentic workflows
+- **LLM Orchestration** - Tool calling and synthesis
+
+---
 
 ## License
 
-MIT
+MIT License - see [LICENSE](LICENSE) for details.
+
+**Disclaimer:** This tool is for **educational purposes only**. It is NOT investment advice. Always consult a qualified financial advisor before making investment decisions.
