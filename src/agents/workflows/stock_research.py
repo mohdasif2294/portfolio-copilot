@@ -99,8 +99,12 @@ async def check_holdings_node(
             "holdings_position": holding,
             "steps_completed": ["check_holdings"],
         }
+<<<<<<< HEAD
     except Exception as e:
         logging.error(f"Error checking holdings for {symbol}: {e}", exc_info=True)
+=======
+    except Exception:
+>>>>>>> main
         return {
             "holdings_position": None,
             "steps_completed": ["check_holdings"],
@@ -132,7 +136,10 @@ async def get_price_node(
             "steps_completed": ["get_price"],
         }
     except Exception:
+<<<<<<< HEAD
         logging.exception(f"get_price error for symbol {symbol}")
+=======
+>>>>>>> main
         return {
             "current_price": None,
             "steps_completed": ["get_price"],
