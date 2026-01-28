@@ -87,10 +87,16 @@ class OllamaProvider:
                         if block.get("type") == "text":
                             text_parts.append(block.get("text", ""))
                         elif block.get("type") == "tool_result":
-                            # Format tool result
-                            result = block.get("content", "")
+                            # Format tool result as pretty-printed JSON
+                            result = block.get("content")
+                            if result is None:
+                                result_json = ""
+                            else:
+                                result_json = json.dumps(result, ensure_ascii=False, indent=2)
                             tool_id = block.get("tool_use_id", "unknown")
-                            text_parts.append(f"Tool result ({tool_id}):\n```json\n{result}\n```")
+                            text_parts.append(
+                                f"Tool result ({tool_id}):\n```json\n{result_json}\n```"
+                            )
                     else:
                         text_parts.append(str(block))
                 content = "\n".join(text_parts)
@@ -216,31 +222,42 @@ class OllamaProvider:
             },
         }
 
-        async with self._client.stream(
-            "POST",
-            f"{self._base_url}/api/chat",
-            json=payload,
-        ) as response:
-            response.raise_for_status()
+        try:
+            async with self._client.stream(
+                "POST",
+                f"{self._base_url}/api/chat",
+                json=payload,
+            ) as response:
+                response.raise_for_status()
 
-            async for line in response.aiter_lines():
-                if not line:
-                    continue
+                async for line in response.aiter_lines():
+                    if not line:
+                        continue
 
-                try:
-                    data = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
+                    try:
+                        data = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
 
-                message = data.get("message", {})
-                content = message.get("content", "")
+                    message = data.get("message", {})
+                    content = message.get("content", "")
 
-                if content:
-                    yield StreamEvent(type="text", text=content)
+                    if content:
+                        yield StreamEvent(type="text", text=content)
 
-                if data.get("done", False):
-                    yield StreamEvent(type="done")
-                    break
+                    if data.get("done", False):
+                        yield StreamEvent(type="done")
+                        break
+        except httpx.ConnectError as e:
+            raise ConnectionError(
+                f"Cannot connect to Ollama at {self._base_url}. "
+                f"Make sure Ollama is running ('ollama serve') or use --provider claude."
+            ) from e
+        except httpx.HTTPStatusError as e:
+            raise ConnectionError(
+                f"Ollama request failed: {e.response.status_code}. "
+                f"Make sure model '{self._model}' is available ('ollama pull {self._model}')."
+            ) from e
 
 
 class OllamaSimpleProvider:

@@ -6,7 +6,7 @@
 [![Anthropic Claude](https://img.shields.io/badge/LLM-Claude-orange.svg)](https://www.anthropic.com/)
 [![Zerodha Kite](https://img.shields.io/badge/Broker-Zerodha%20Kite-red.svg)](https://kite.zerodha.com/)
 
-> Ask questions about your portfolio in plain English. Get intelligent analysis powered by Claude.
+> Ask questions about your portfolio in plain English. Get intelligent analysis powered by multiple LLM providers.
 
 ![Web UI Screenshot](docs/images/web-ui.png)
 

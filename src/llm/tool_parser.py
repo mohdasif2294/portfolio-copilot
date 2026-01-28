@@ -89,8 +89,12 @@ def parse_tool_calls_from_text(
     tool_calls: list[ToolCall] = []
     remaining_text = text
 
-    # Valid tool names if provided
-    valid_names = {t["name"] for t in tools} if tools else None
+    # Valid tool names if provided (defensively handle missing/empty names)
+    valid_names = (
+        {t.get("name") for t in tools if t.get("name")}
+        if tools
+        else None
+    )
 
     def try_parse_tool_call(json_str: str) -> ToolCall | None:
         """Try to parse a JSON string as a tool call."""

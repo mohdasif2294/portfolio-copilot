@@ -5,7 +5,7 @@ import os
 from collections.abc import AsyncIterator
 from typing import Any
 
-from anthropic import Anthropic
+from anthropic import Anthropic, AsyncAnthropic
 from dotenv import load_dotenv
 
 from src.core.config import get_config
@@ -47,8 +47,8 @@ When presenting holdings or positions:
 Message = type("Message", (), {"role": str, "content": str})
 
 
-def _get_anthropic_client(api_key: str | None = None) -> Anthropic:
-    """Get Anthropic client instance."""
+def _get_anthropic_client(api_key: str | None = None) -> AsyncAnthropic:
+    """Get asynchronous Anthropic client instance."""
     key = api_key or os.getenv("ANTHROPIC_API_KEY")
     if not key:
         raise ValueError("ANTHROPIC_API_KEY not set in environment")
@@ -71,7 +71,7 @@ class ClaudeProvider:
         """
         config = get_config()
         self._model = model or config.claude_model
-        self._client = _get_anthropic_client(api_key)
+        self._client: AsyncAnthropic = _get_anthropic_client(api_key)
 
     async def complete(
         self,
@@ -102,15 +102,15 @@ class ClaudeProvider:
         if tools:
             kwargs["tools"] = tools
 
-        response = self._client.messages.create(**kwargs)
+        response = await self._client.messages.create(**kwargs)
 
         # Extract content and tool calls
-        content = ""
+        content_parts: list[str] = []
         tool_calls: list[ToolCall] = []
 
         for block in response.content:
             if block.type == "text":
-                content = block.text
+                content_parts.append(block.text)
             elif block.type == "tool_use":
                 tool_calls.append(
                     ToolCall(
@@ -119,6 +119,8 @@ class ClaudeProvider:
                         input=block.input,
                     )
                 )
+
+        content = "".join(content_parts)
 
         return CompletionResponse(
             content=content,
@@ -155,11 +157,11 @@ class ClaudeProvider:
         if tools:
             kwargs["tools"] = tools
 
-        with self._client.messages.stream(**kwargs) as stream:
+        async with self._client.messages.stream(**kwargs) as stream:
             tool_calls: list[ToolCall] = []
             current_text = ""
 
-            for event in stream:
+            async for event in stream:
                 if event.type == "content_block_start":
                     block = event.content_block
                     if block.type == "text":
@@ -180,7 +182,7 @@ class ClaudeProvider:
                         yield StreamEvent(type="text", text=delta.text)
 
             # Get the final message
-            final_message = stream.get_final_message()
+            final_message = await stream.get_final_message()
 
             # Emit tool calls
             for block in final_message.content:
@@ -209,7 +211,7 @@ class ClaudeSimpleProvider:
         """
         config = get_config()
         self._model = model or config.claude_model
-        self._client = _get_anthropic_client(api_key)
+        self._client: AsyncAnthropic = _get_anthropic_client(api_key)
 
     async def complete(
         self,
@@ -236,7 +238,7 @@ class ClaudeSimpleProvider:
         if system:
             kwargs["system"] = system
 
-        response = self._client.messages.create(**kwargs)
+        response = await self._client.messages.create(**kwargs)
 
         if not response.content:
             return ""
@@ -267,6 +269,7 @@ class PortfolioAssistant:
         self._kite = kite_client
         self._history: list[dict[str, Any]] = []
         self._tools = get_all_tools()
+        self._pending_tool_calls: list[ToolCall] = []
 
     def clear_history(self) -> None:
         """Clear conversation history."""
@@ -370,7 +373,7 @@ class PortfolioAssistant:
 
     async def _stream_claude(self) -> AsyncIterator[StreamEvent]:
         """Stream response using Claude provider."""
-        self._pending_tool_calls: list[ToolCall] = []
+        self._pending_tool_calls = []
         response_content: list[dict[str, Any]] = []
         accumulated_text = ""
 
@@ -427,11 +430,29 @@ class PortfolioAssistant:
                 self._pending_tool_calls.append(event.tool_call)
                 yield event
             elif event.type == "done":
-                # Add to history
-                self._history.append({
-                    "role": "assistant",
-                    "content": accumulated_text,
-                })
+                # Build response content for history (text + tool_use blocks)
+                response_content: list[dict[str, Any]] = []
+
+                if accumulated_text:
+                    response_content.append({
+                        "type": "text",
+                        "text": accumulated_text,
+                    })
+
+                for tc in self._pending_tool_calls:
+                    response_content.append({
+                        "type": "tool_use",
+                        "id": tc.id,
+                        "name": tc.name,
+                        "input": tc.input,
+                    })
+
+                # Only append to history if we have content
+                if response_content:
+                    self._history.append({
+                        "role": "assistant",
+                        "content": response_content,
+                    })
 
                 if not self._pending_tool_calls:
                     yield event
