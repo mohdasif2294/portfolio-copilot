@@ -1,12 +1,15 @@
 """Claude client with streaming and tool support."""
 
 import json
+import logging
 import os
 from collections.abc import AsyncIterator
 from typing import Any
 
 from anthropic import Anthropic, AsyncAnthropic
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 from src.core.config import get_config
 from src.llm.base import CompletionResponse, StreamEvent, ToolCall
@@ -52,7 +55,7 @@ def _get_anthropic_client(api_key: str | None = None) -> AsyncAnthropic:
     key = api_key or os.getenv("ANTHROPIC_API_KEY")
     if not key:
         raise ValueError("ANTHROPIC_API_KEY not set in environment")
-    return Anthropic(api_key=key)
+    return AsyncAnthropic(api_key=key)
 
 
 class ClaudeProvider:
@@ -280,7 +283,44 @@ class PortfolioAssistant:
         try:
             # Portfolio tools (Kite MCP)
             if name == "get_holdings":
-                result = await self._kite.get_holdings()
+                holdings = await self._kite.get_holdings()
+                # Calculate totals and include in response to avoid LLM arithmetic errors
+                if holdings and isinstance(holdings, list):
+                    total_investment = sum(
+                        h.get("quantity", 0) * h.get("average_price", 0)
+                        for h in holdings
+                    )
+                    total_current = sum(
+                        h.get("quantity", 0) * h.get("last_price", 0)
+                        for h in holdings
+                    )
+                    total_pnl = sum(h.get("pnl", 0) for h in holdings)
+                    total_day_change = sum(
+                        h.get("quantity", 0) * h.get("day_change", 0)
+                        for h in holdings
+                    )
+                    logger.info(
+                        f"Holdings: {len(holdings)} stocks, "
+                        f"Investment: ₹{total_investment:,.2f}, "
+                        f"Current: ₹{total_current:,.2f}, "
+                        f"P&L: ₹{total_pnl:,.2f}"
+                    )
+                    # Return holdings with pre-calculated summary
+                    result = {
+                        "holdings": holdings,
+                        "summary": {
+                            "total_stocks": len(holdings),
+                            "total_investment": round(total_investment, 2),
+                            "total_current_value": round(total_current, 2),
+                            "total_pnl": round(total_pnl, 2),
+                            "total_pnl_percentage": round(
+                                (total_pnl / total_investment * 100) if total_investment > 0 else 0, 2
+                            ),
+                            "total_day_change": round(total_day_change, 2),
+                        },
+                    }
+                else:
+                    result = {"holdings": [], "summary": {}}
             elif name == "get_positions":
                 result = await self._kite.get_positions()
             elif name == "get_margins":

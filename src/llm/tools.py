@@ -6,7 +6,29 @@ from typing import Any
 PORTFOLIO_TOOLS: list[dict[str, Any]] = [
     {
         "name": "get_holdings",
-        "description": "Fetch the user's portfolio holdings (long-term stocks held in DEMAT account). Returns list of stocks with symbol, quantity, average price, current price, and P&L.",
+        "description": """Fetch the user's portfolio holdings (long-term stocks held in DEMAT account).
+
+Returns an object with two parts:
+
+1. "holdings": List of individual holdings, each with:
+   - tradingsymbol: Stock symbol (e.g., "RELIANCE", "TCS")
+   - exchange: Exchange (e.g., "NSE", "BSE")
+   - quantity: Number of shares held
+   - average_price: Average purchase price per share
+   - last_price: Current market price per share
+   - pnl: Profit/Loss in rupees for this stock
+   - day_change: Today's price change per share
+   - day_change_percentage: Today's % change
+
+2. "summary": Pre-calculated portfolio totals (USE THESE VALUES):
+   - total_stocks: Number of stocks in portfolio
+   - total_investment: Total amount invested (sum of quantity × average_price)
+   - total_current_value: Current portfolio value (sum of quantity × last_price)
+   - total_pnl: Total profit/loss in rupees
+   - total_pnl_percentage: Overall return percentage
+   - total_day_change: Today's total change in rupees
+
+IMPORTANT: Always use the values from "summary" for portfolio totals. Do not recalculate them.""",
         "input_schema": {
             "type": "object",
             "properties": {},

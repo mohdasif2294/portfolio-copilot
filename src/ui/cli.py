@@ -3,11 +3,13 @@
 
 import argparse
 import asyncio
+import logging
 import webbrowser
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from rich.console import Console
+from rich.logging import RichHandler
 from rich.markdown import Markdown
 from rich.prompt import Prompt
 from rich.table import Table
@@ -17,6 +19,19 @@ from src.llm.claude import PortfolioAssistant
 from src.mcp.kite_client import AuthenticationError, KiteClient
 
 console = Console()
+
+
+def setup_logging(debug: bool = False) -> None:
+    """Configure logging based on debug flag."""
+    level = logging.DEBUG if debug else logging.WARNING
+    logging.basicConfig(
+        level=level,
+        format="%(message)s",
+        handlers=[RichHandler(console=console, show_path=False, markup=True)],
+    )
+    # Also set level on specific loggers
+    logging.getLogger("src.llm.claude").setLevel(level)
+    logging.getLogger("src.mcp.kite_client").setLevel(level)
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,6 +50,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model",
         help="Model name override (e.g., 'llama3.1' for Ollama, 'claude-sonnet-4-20250514' for Claude)",
+    )
+
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging (shows raw API data)",
     )
 
     return parser.parse_args()
@@ -490,6 +511,9 @@ async def check_login_status(client: KiteClient) -> None:
 
 async def async_main(args: argparse.Namespace) -> None:
     """Async main entry point."""
+    # Setup logging
+    setup_logging(debug=args.debug)
+
     # Apply CLI overrides to config
     if args.provider:
         set_provider(args.provider, args.model)
