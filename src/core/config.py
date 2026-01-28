@@ -2,36 +2,61 @@
 
 import os
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Final, Literal
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
-ProviderType = Literal["ollama", "claude"]
+# Environment variable names
+ENV_LLM_PROVIDER = "LLM_PROVIDER"
+ENV_OLLAMA_BASE_URL = "OLLAMA_BASE_URL"
+ENV_OLLAMA_MODEL = "OLLAMA_MODEL"
+ENV_CLAUDE_MODEL = "CLAUDE_MODEL"
+
+# Provider identifiers
+PROVIDER_OLLAMA: Final = "ollama"
+PROVIDER_CLAUDE: Final = "claude"
+
+# Default configuration values
+DEFAULT_PROVIDER: str = PROVIDER_OLLAMA
+DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
+DEFAULT_OLLAMA_MODEL = "llama3"
+DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-20250514"
+
+ProviderType = Literal[PROVIDER_OLLAMA, PROVIDER_CLAUDE]
 
 
 @dataclass
 class LLMConfig:
     """Configuration for LLM providers."""
 
-    provider: ProviderType = "ollama"
-    ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "llama3"
-    claude_model: str = "claude-sonnet-4-20250514"
+    provider: ProviderType = DEFAULT_PROVIDER
+    ollama_base_url: str = DEFAULT_OLLAMA_BASE_URL
+    ollama_model: str = DEFAULT_OLLAMA_MODEL
+    claude_model: str = DEFAULT_CLAUDE_MODEL
 
     @classmethod
     def from_env(cls) -> "LLMConfig":
         """Load configuration from environment variables."""
-        provider = os.getenv("LLM_PROVIDER", "ollama").lower()
-        if provider not in ("ollama", "claude"):
-            provider = "ollama"
+        provider = os.getenv(ENV_LLM_PROVIDER, DEFAULT_PROVIDER).lower()
+        if provider not in (PROVIDER_OLLAMA, PROVIDER_CLAUDE):
+            provider = DEFAULT_PROVIDER
 
         return cls(
             provider=provider,  # type: ignore
-            ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
-            ollama_model=os.getenv("OLLAMA_MODEL", "llama3"),
-            claude_model=os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514"),
+            ollama_base_url=os.getenv(
+                ENV_OLLAMA_BASE_URL,
+                DEFAULT_OLLAMA_BASE_URL,
+            ),
+            ollama_model=os.getenv(
+                ENV_OLLAMA_MODEL,
+                DEFAULT_OLLAMA_MODEL,
+            ),
+            claude_model=os.getenv(
+                ENV_CLAUDE_MODEL,
+                DEFAULT_CLAUDE_MODEL,
+            ),
         )
 
 
