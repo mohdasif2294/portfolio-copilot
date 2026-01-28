@@ -1,11 +1,8 @@
 """Portfolio Analysis Agent workflow using LangGraph."""
 
 import operator
-import os
 from typing import Annotated, Any, TypedDict
 
-from anthropic import Anthropic
-from dotenv import load_dotenv
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
 
@@ -16,8 +13,6 @@ from src.agents.tools.news_tools import (
 )
 from src.agents.tools.portfolio_tools import analyze_performers, fetch_holdings
 from src.mcp.kite_client import KiteClient
-
-load_dotenv()
 
 
 # Define state schema with reducers for proper state propagation
@@ -40,16 +35,6 @@ class PortfolioState(TypedDict):
     error: Annotated[str | None, replace_value]
     steps_completed: Annotated[list, operator.add]  # Accumulate steps
 
-# LLM for generating insights
-MODEL = "claude-sonnet-4-20250514"
-
-
-def _get_anthropic() -> Anthropic:
-    """Get Anthropic client."""
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise ValueError("ANTHROPIC_API_KEY not set")
-    return Anthropic(api_key=api_key)
 
 
 # Node functions for the workflow
@@ -125,8 +110,8 @@ async def fetch_news_node(state: PortfolioState) -> dict[str, Any]:
     }
 
 
-def generate_insights_node(state: PortfolioState) -> dict[str, Any]:
-    """Node: Generate insights using Claude."""
+async def generate_insights_node(state: PortfolioState) -> dict[str, Any]:
+    """Node: Generate insights using LLM."""
     holdings = state.get("holdings", [])
     target_stocks = state.get("target_stocks", [])
     news_context = state.get("news_context", [])
@@ -182,25 +167,17 @@ Provide a concise analysis that:
 Keep the response focused and under 300 words."""
 
     try:
-        anthropic = _get_anthropic()
-        response = anthropic.messages.create(
-            model=MODEL,
-            max_tokens=1024,
+        from src.llm.factory import get_simple_provider
+
+        provider = get_simple_provider()
+        insights = await provider.complete(
             messages=[{"role": "user", "content": prompt}],
+            max_tokens=1024,
         )
 
-        # Safely extract insights from response
-        if not response.content or len(response.content) == 0:
+        if not insights:
             insights = "Error: Empty response from AI model"
-        elif not hasattr(response.content[0], "text"):
-            insights = f"Error: Unexpected response format. Expected text content, got {type(response.content[0]).__name__}"
-        else:
-            insights = response.content[0].text
 
-    except IndexError as e:
-        insights = f"Error: Response content is empty or malformed: {e}"
-    except AttributeError as e:
-        insights = f"Error: Response content missing expected 'text' attribute: {e}"
     except Exception as e:
         insights = f"Error generating insights: {e}"
 

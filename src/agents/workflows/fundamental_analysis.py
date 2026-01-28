@@ -1,12 +1,9 @@
 """Fundamental Analysis Agent using screener.in data, news, and LLM synthesis."""
 
 import operator
-import os
 from dataclasses import dataclass, field
 from typing import Annotated, Any, TypedDict
 
-from anthropic import Anthropic
-from dotenv import load_dotenv
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
 
@@ -18,10 +15,6 @@ from src.agents.tools.news_tools import (
 from src.agents.tools.symbol_tools import extract_symbol
 from src.data.scrapers.screener import FundamentalData, get_stock_fundamentals
 from src.mcp.kite_client import KiteClient
-
-load_dotenv()
-
-MODEL = "claude-sonnet-4-20250514"
 
 
 def replace_value(current: Any, new: Any) -> Any:
@@ -45,14 +38,6 @@ class FundamentalAnalysisState(TypedDict):
     response: Annotated[str, replace_value]
     error: Annotated[str | None, replace_value]
     steps_completed: Annotated[list, operator.add]
-
-
-def _get_anthropic() -> Anthropic:
-    """Get Anthropic client."""
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise ValueError("ANTHROPIC_API_KEY not set")
-    return Anthropic(api_key=api_key)
 
 
 @dataclass
@@ -414,8 +399,8 @@ async def fetch_news_node(state: FundamentalAnalysisState) -> dict[str, Any]:
     }
 
 
-def generate_analysis_node(state: FundamentalAnalysisState) -> dict[str, Any]:
-    """Node: Generate comprehensive analysis using Claude."""
+async def generate_analysis_node(state: FundamentalAnalysisState) -> dict[str, Any]:
+    """Node: Generate comprehensive analysis using LLM."""
     query = state.get("query", "")
     fundamentals = state.get("fundamentals")
     score = state.get("score") or FundamentalScore()
@@ -479,14 +464,16 @@ Keep the analysis concise but comprehensive (under 500 words).
 IMPORTANT: This is for informational purposes only, not financial advice."""
 
     try:
-        anthropic = _get_anthropic()
-        response = anthropic.messages.create(
-            model=MODEL,
-            max_tokens=2048,
+        from src.llm.factory import get_simple_provider
+
+        provider = get_simple_provider()
+        analysis = await provider.complete(
             messages=[{"role": "user", "content": prompt}],
+            max_tokens=2048,
         )
 
-        analysis = response.content[0].text
+        if not analysis:
+            analysis = "## Analysis Error\n\nReceived empty response from AI model"
 
     except Exception as e:
         analysis = f"## Analysis Error\n\nUnable to generate analysis: {e}"

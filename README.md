@@ -2,7 +2,8 @@
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
-[![Anthropic Claude](https://img.shields.io/badge/LLM-Claude%20Sonnet%204-orange.svg)](https://www.anthropic.com/)
+[![Ollama](https://img.shields.io/badge/LLM-Ollama-white.svg)](https://ollama.ai/)
+[![Anthropic Claude](https://img.shields.io/badge/LLM-Claude-orange.svg)](https://www.anthropic.com/)
 [![Zerodha Kite](https://img.shields.io/badge/Broker-Zerodha%20Kite-red.svg)](https://kite.zerodha.com/)
 
 > Ask questions about your portfolio in plain English. Get intelligent analysis powered by Claude.
@@ -29,7 +30,7 @@ poetry install
 
 # Configure
 cp .env.example .env
-# Add your ANTHROPIC_API_KEY to .env
+# Edit .env to set your preferred LLM provider (see below)
 
 # Run
 make web    # Web interface at http://localhost:8501
@@ -37,7 +38,45 @@ make web    # Web interface at http://localhost:8501
 make cli    # Terminal interface
 ```
 
-**Prerequisites:** Python 3.12+, [Poetry](https://python-poetry.org/docs/#installation), [Anthropic API key](https://console.anthropic.com/)
+**Prerequisites:** Python 3.12+, [Poetry](https://python-poetry.org/docs/#installation)
+
+### LLM Provider Setup
+
+Choose between **Ollama** (local, free) or **Claude** (API, paid):
+
+#### Option 1: Ollama (Default - Local & Free)
+
+```bash
+# Install Ollama from https://ollama.ai
+ollama pull llama3
+
+# Run (uses Ollama by default)
+make cli
+```
+
+#### Option 2: Claude (Anthropic API)
+
+```bash
+# Set in .env
+LLM_PROVIDER=claude
+ANTHROPIC_API_KEY=sk-ant-xxx
+
+# Or use CLI flag
+python -m src.ui.cli --provider claude
+```
+
+#### CLI Options
+
+```bash
+# Use Ollama with a specific model
+python -m src.ui.cli --provider ollama --model llama3.1
+
+# Use Claude
+python -m src.ui.cli --provider claude
+
+# Override model
+python -m src.ui.cli --provider claude --model claude-sonnet-4-20250514
+```
 
 ---
 
@@ -142,8 +181,15 @@ The system uses specialized AI agents for different tasks:
                               │
                               ▼
                     ┌─────────────────┐
-                    │   Claude LLM    │
-                    │   (Synthesis)   │
+                    │   LLM Provider  │
+                    │  ┌───────────┐  │
+                    │  │  Ollama   │  │
+                    │  │ (Default) │  │
+                    │  └───────────┘  │
+                    │  ┌───────────┐  │
+                    │  │  Claude   │  │
+                    │  │ (Optional)│  │
+                    │  └───────────┘  │
                     └─────────────────┘
 ```
 
@@ -152,7 +198,7 @@ The system uses specialized AI agents for different tasks:
 | Component | Technology |
 |-----------|------------|
 | Language | Python 3.12 |
-| LLM | Claude Sonnet 4 (Anthropic) |
+| LLM | Ollama (Llama 3) or Claude (Anthropic) |
 | Agent Framework | LangGraph |
 | Vector Database | ChromaDB |
 | Embeddings | Sentence Transformers (all-MiniLM-L6-v2) |
@@ -168,6 +214,7 @@ This is a learning project to understand modern AI systems:
 - **RAG (Retrieval Augmented Generation)** - News context
 - **LangGraph** - Agentic workflows
 - **LLM Orchestration** - Tool calling and synthesis
+- **Multi-Provider Support** - Abstraction layer for local (Ollama) and API (Claude) models
 
 ---
 

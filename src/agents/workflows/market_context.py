@@ -1,11 +1,8 @@
 """Market Context Agent workflow using LangGraph."""
 
 import operator
-import os
 from typing import Annotated, Any, TypedDict
 
-from anthropic import Anthropic
-from dotenv import load_dotenv
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
 
@@ -15,10 +12,6 @@ from src.agents.tools.news_tools import (
     search_stock_news,
 )
 from src.mcp.kite_client import KiteClient
-
-load_dotenv()
-
-MODEL = "claude-sonnet-4-20250514"
 
 
 def replace_value(current: Any, new: Any) -> Any:
@@ -36,14 +29,6 @@ class MarketContextState(TypedDict):
     context_report: Annotated[str, replace_value]
     error: Annotated[str | None, replace_value]
     steps_completed: Annotated[list, operator.add]
-
-
-def _get_anthropic() -> Anthropic:
-    """Get Anthropic client."""
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise ValueError("ANTHROPIC_API_KEY not set")
-    return Anthropic(api_key=api_key)
 
 
 # Node functions
@@ -193,8 +178,8 @@ async def fetch_market_news_node(state: MarketContextState) -> dict[str, Any]:
     }
 
 
-def generate_context_node(state: MarketContextState) -> dict[str, Any]:
-    """Node: Generate market context explanation using Claude."""
+async def generate_context_node(state: MarketContextState) -> dict[str, Any]:
+    """Node: Generate market context explanation using LLM."""
     query = state.get("query", "")
     portfolio_pnl = state.get("portfolio_pnl") or {}
     movers = state.get("movers", [])
@@ -248,14 +233,16 @@ Provide a clear explanation that:
 Keep it concise (under 350 words) and insightful."""
 
     try:
-        anthropic = _get_anthropic()
-        response = anthropic.messages.create(
-            model=MODEL,
-            max_tokens=1024,
+        from src.llm.factory import get_simple_provider
+
+        provider = get_simple_provider()
+        report = await provider.complete(
             messages=[{"role": "user", "content": prompt}],
+            max_tokens=1024,
         )
 
-        report = response.content[0].text
+        if not report:
+            report = "Error: Empty response from AI model"
 
     except Exception as e:
         report = f"Error generating context: {e}"

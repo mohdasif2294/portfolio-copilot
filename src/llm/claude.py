@@ -3,18 +3,18 @@
 import json
 import os
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
 from typing import Any
 
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
+from src.core.config import get_config
+from src.llm.base import CompletionResponse, StreamEvent, ToolCall
 from src.llm.tools import get_all_tools
 from src.mcp.kite_client import KiteClient
 
 load_dotenv()
 
-MODEL = "claude-sonnet-4-20250514"
 MAX_TOKENS = 4096
 
 SYSTEM_PROMPT = """You are Portfolio Copilot, an AI assistant that helps users understand and analyze their stock portfolio on Zerodha Kite.
@@ -43,41 +43,227 @@ When presenting holdings or positions:
 """
 
 
-@dataclass
-class Message:
-    """A conversation message."""
-
-    role: str  # "user" or "assistant"
-    content: str
+# Re-export for backward compatibility
+Message = type("Message", (), {"role": str, "content": str})
 
 
-@dataclass
-class ToolCall:
-    """A tool call from Claude."""
+def _get_anthropic_client(api_key: str | None = None) -> Anthropic:
+    """Get Anthropic client instance."""
+    key = api_key or os.getenv("ANTHROPIC_API_KEY")
+    if not key:
+        raise ValueError("ANTHROPIC_API_KEY not set in environment")
+    return Anthropic(api_key=key)
 
-    id: str
-    name: str
-    input: dict[str, Any]
+
+class ClaudeProvider:
+    """Claude LLM provider with tool calling support."""
+
+    def __init__(
+        self,
+        model: str | None = None,
+        api_key: str | None = None,
+    ):
+        """Initialize Claude provider.
+
+        Args:
+            model: Model name (defaults to config)
+            api_key: API key (defaults to environment)
+        """
+        config = get_config()
+        self._model = model or config.claude_model
+        self._client = _get_anthropic_client(api_key)
+
+    async def complete(
+        self,
+        messages: list[dict[str, Any]],
+        system: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        max_tokens: int = 4096,
+    ) -> CompletionResponse:
+        """Generate a completion with optional tool calling.
+
+        Args:
+            messages: Conversation messages
+            system: Optional system prompt
+            tools: Optional tool definitions
+            max_tokens: Maximum tokens to generate
+
+        Returns:
+            CompletionResponse with content and any tool calls
+        """
+        kwargs: dict[str, Any] = {
+            "model": self._model,
+            "max_tokens": max_tokens,
+            "messages": messages,
+        }
+
+        if system:
+            kwargs["system"] = system
+        if tools:
+            kwargs["tools"] = tools
+
+        response = self._client.messages.create(**kwargs)
+
+        # Extract content and tool calls
+        content = ""
+        tool_calls: list[ToolCall] = []
+
+        for block in response.content:
+            if block.type == "text":
+                content = block.text
+            elif block.type == "tool_use":
+                tool_calls.append(
+                    ToolCall(
+                        id=block.id,
+                        name=block.name,
+                        input=block.input,
+                    )
+                )
+
+        return CompletionResponse(
+            content=content,
+            tool_calls=tool_calls,
+            stop_reason=response.stop_reason or "end_turn",
+        )
+
+    async def stream(
+        self,
+        messages: list[dict[str, Any]],
+        system: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        max_tokens: int = 4096,
+    ) -> AsyncIterator[StreamEvent]:
+        """Stream a completion response.
+
+        Args:
+            messages: Conversation messages
+            system: Optional system prompt
+            tools: Optional tool definitions
+            max_tokens: Maximum tokens to generate
+
+        Yields:
+            StreamEvent objects as the response is generated
+        """
+        kwargs: dict[str, Any] = {
+            "model": self._model,
+            "max_tokens": max_tokens,
+            "messages": messages,
+        }
+
+        if system:
+            kwargs["system"] = system
+        if tools:
+            kwargs["tools"] = tools
+
+        with self._client.messages.stream(**kwargs) as stream:
+            tool_calls: list[ToolCall] = []
+            current_text = ""
+
+            for event in stream:
+                if event.type == "content_block_start":
+                    block = event.content_block
+                    if block.type == "text":
+                        current_text = ""
+                    elif block.type == "tool_use":
+                        tool_calls.append(
+                            ToolCall(
+                                id=block.id,
+                                name=block.name,
+                                input={},
+                            )
+                        )
+
+                elif event.type == "content_block_delta":
+                    delta = event.delta
+                    if delta.type == "text_delta":
+                        current_text += delta.text
+                        yield StreamEvent(type="text", text=delta.text)
+
+            # Get the final message
+            final_message = stream.get_final_message()
+
+            # Emit tool calls
+            for block in final_message.content:
+                if block.type == "tool_use":
+                    for tc in tool_calls:
+                        if tc.id == block.id:
+                            tc.input = block.input
+                            yield StreamEvent(type="tool_use", tool_call=tc)
+
+            yield StreamEvent(type="done")
 
 
-@dataclass
-class StreamEvent:
-    """An event from the streaming response."""
+class ClaudeSimpleProvider:
+    """Simple Claude provider for basic completions without tool calling."""
 
-    type: str  # "text", "tool_use", "done"
-    text: str = ""
-    tool_call: ToolCall | None = None
+    def __init__(
+        self,
+        model: str | None = None,
+        api_key: str | None = None,
+    ):
+        """Initialize simple Claude provider.
+
+        Args:
+            model: Model name (defaults to config)
+            api_key: API key (defaults to environment)
+        """
+        config = get_config()
+        self._model = model or config.claude_model
+        self._client = _get_anthropic_client(api_key)
+
+    async def complete(
+        self,
+        messages: list[dict[str, Any]],
+        system: str | None = None,
+        max_tokens: int = 1024,
+    ) -> str:
+        """Generate a simple text completion.
+
+        Args:
+            messages: Conversation messages
+            system: Optional system prompt
+            max_tokens: Maximum tokens to generate
+
+        Returns:
+            Generated text content
+        """
+        kwargs: dict[str, Any] = {
+            "model": self._model,
+            "max_tokens": max_tokens,
+            "messages": messages,
+        }
+
+        if system:
+            kwargs["system"] = system
+
+        response = self._client.messages.create(**kwargs)
+
+        if not response.content:
+            return ""
+
+        return response.content[0].text if hasattr(response.content[0], "text") else ""
 
 
 class PortfolioAssistant:
     """Claude-powered portfolio assistant with tool calling."""
 
-    def __init__(self, kite_client: KiteClient):
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY not set in environment")
+    def __init__(
+        self,
+        kite_client: KiteClient,
+        provider: Any | None = None,
+    ):
+        """Initialize portfolio assistant.
 
-        self._anthropic = Anthropic(api_key=api_key)
+        Args:
+            kite_client: KiteClient for executing portfolio tools
+            provider: Optional LLM provider (defaults to factory provider)
+        """
+        if provider is None:
+            from src.llm.factory import get_llm_provider
+
+            provider = get_llm_provider()
+
+        self._provider = provider
         self._kite = kite_client
         self._history: list[dict[str, Any]] = []
         self._tools = get_all_tools()
@@ -148,94 +334,120 @@ class PortfolioAssistant:
         """Send a message and stream the response.
 
         Handles tool calls automatically - executes tools and continues
-        the conversation until Claude provides a final text response.
+        the conversation until the LLM provides a final text response.
         """
         # Add user message to history
         self._history.append({"role": "user", "content": user_message})
 
+        # Check if provider is Claude (native tool calling) or Ollama (prompt-based)
+        is_claude = isinstance(self._provider, ClaudeProvider)
+
         while True:
-            # Create streaming request
-            with self._anthropic.messages.stream(
-                model=MODEL,
-                max_tokens=MAX_TOKENS,
-                system=SYSTEM_PROMPT,
-                tools=self._tools,
-                messages=self._history,
-            ) as stream:
-                response_content: list[dict[str, Any]] = []
-                current_text = ""
-                tool_calls: list[ToolCall] = []
+            if is_claude:
+                # Claude: Use native streaming with tool calling
+                async for event in self._stream_claude():
+                    if event.type == "done":
+                        return
+                    yield event
 
-                for event in stream:
-                    if event.type == "content_block_start":
-                        block = event.content_block
-                        if block.type == "text":
-                            current_text = ""
-                        elif block.type == "tool_use":
-                            tool_calls.append(
-                                ToolCall(
-                                    id=block.id,
-                                    name=block.name,
-                                    input={},
-                                )
-                            )
-
-                    elif event.type == "content_block_delta":
-                        delta = event.delta
-                        if delta.type == "text_delta":
-                            current_text += delta.text
-                            yield StreamEvent(type="text", text=delta.text)
-                        elif delta.type == "input_json_delta":
-                            # Accumulate tool input JSON
-                            if tool_calls:
-                                # Parse partial JSON as it comes in
-                                pass  # We'll get the full input from the final message
-
-                    elif event.type == "message_delta":
-                        pass  # Message-level updates
-
-                # Get the final message
-                final_message = stream.get_final_message()
-
-                # Process content blocks
-                for block in final_message.content:
-                    if block.type == "text":
-                        response_content.append({"type": "text", "text": block.text})
-                    elif block.type == "tool_use":
-                        response_content.append({
-                            "type": "tool_use",
-                            "id": block.id,
-                            "name": block.name,
-                            "input": block.input,
-                        })
-                        # Update tool call with full input
-                        for tc in tool_calls:
-                            if tc.id == block.id:
-                                tc.input = block.input
-                                yield StreamEvent(type="tool_use", tool_call=tc)
-
-                # Add assistant response to history
-                self._history.append({"role": "assistant", "content": response_content})
-
-                # Check if we need to execute tools
-                if final_message.stop_reason == "tool_use":
-                    # Execute all tool calls and add results
-                    tool_results = []
-                    for block in final_message.content:
-                        if block.type == "tool_use":
-                            result = await self._execute_tool(block.name, block.input)
-                            tool_results.append({
-                                "type": "tool_result",
-                                "tool_use_id": block.id,
-                                "content": result,
-                            })
-
-                    # Add tool results to history
-                    self._history.append({"role": "user", "content": tool_results})
-
-                    # Continue the loop to get Claude's response to tool results
+                # Check if we need to handle tool calls
+                if self._pending_tool_calls:
+                    await self._handle_tool_calls()
                     continue
+                return
+            else:
+                # Ollama: Use prompt-based tool calling
+                async for event in self._stream_ollama():
+                    if event.type == "done":
+                        return
+                    yield event
 
-                # No more tool calls - we're done
-                yield StreamEvent(type="done")
-                break
+                # Check if we need to handle tool calls
+                if self._pending_tool_calls:
+                    await self._handle_tool_calls()
+                    continue
+                return
+
+    async def _stream_claude(self) -> AsyncIterator[StreamEvent]:
+        """Stream response using Claude provider."""
+        self._pending_tool_calls: list[ToolCall] = []
+        response_content: list[dict[str, Any]] = []
+        accumulated_text = ""
+
+        async for event in self._provider.stream(
+            messages=self._history,
+            system=SYSTEM_PROMPT,
+            tools=self._tools,
+            max_tokens=MAX_TOKENS,
+        ):
+            if event.type == "text":
+                accumulated_text += event.text
+                yield event
+            elif event.type == "tool_use" and event.tool_call:
+                self._pending_tool_calls.append(event.tool_call)
+                yield event
+            elif event.type == "done":
+                # Build response content for history
+                if accumulated_text:
+                    response_content.append({
+                        "type": "text",
+                        "text": accumulated_text,
+                    })
+
+                for tc in self._pending_tool_calls:
+                    response_content.append({
+                        "type": "tool_use",
+                        "id": tc.id,
+                        "name": tc.name,
+                        "input": tc.input,
+                    })
+
+                # Only append to history if we have content
+                if response_content:
+                    self._history.append({"role": "assistant", "content": response_content})
+
+                if not self._pending_tool_calls:
+                    yield event
+
+    async def _stream_ollama(self) -> AsyncIterator[StreamEvent]:
+        """Stream response using Ollama provider."""
+        self._pending_tool_calls = []
+        accumulated_text = ""
+
+        async for event in self._provider.stream(
+            messages=self._history,
+            system=SYSTEM_PROMPT,
+            tools=self._tools,
+            max_tokens=MAX_TOKENS,
+        ):
+            if event.type == "text":
+                accumulated_text += event.text
+                yield event
+            elif event.type == "tool_use" and event.tool_call:
+                self._pending_tool_calls.append(event.tool_call)
+                yield event
+            elif event.type == "done":
+                # Add to history
+                self._history.append({
+                    "role": "assistant",
+                    "content": accumulated_text,
+                })
+
+                if not self._pending_tool_calls:
+                    yield event
+
+    async def _handle_tool_calls(self) -> None:
+        """Execute pending tool calls and add results to history."""
+        tool_results = []
+
+        for tc in self._pending_tool_calls:
+            result = await self._execute_tool(tc.name, tc.input)
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": tc.id,
+                "content": result,
+            })
+
+        # Add tool results to history
+        self._history.append({"role": "user", "content": tool_results})
+        self._pending_tool_calls = []

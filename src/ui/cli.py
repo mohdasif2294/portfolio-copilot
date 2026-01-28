@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """CLI interface for Portfolio CoPilot."""
 
+import argparse
 import asyncio
 import webbrowser
 from collections.abc import Awaitable, Callable
@@ -11,10 +12,32 @@ from rich.markdown import Markdown
 from rich.prompt import Prompt
 from rich.table import Table
 
+from src.core.config import get_config, set_provider
 from src.llm.claude import PortfolioAssistant
 from src.mcp.kite_client import AuthenticationError, KiteClient
 
 console = Console()
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Portfolio Copilot - AI-powered portfolio analysis",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    parser.add_argument(
+        "--provider",
+        choices=["ollama", "claude"],
+        help="LLM provider to use (default: from LLM_PROVIDER env var, or 'ollama')",
+    )
+
+    parser.add_argument(
+        "--model",
+        help="Model name override (e.g., 'llama3.1' for Ollama, 'claude-sonnet-4-20250514' for Claude)",
+    )
+
+    return parser.parse_args()
 
 
 def format_value(value: float, suffix: str = "") -> str:
@@ -465,9 +488,27 @@ async def check_login_status(client: KiteClient) -> None:
         console.print("[dim]Run 'login' to connect to your Kite account.[/dim]\n")
 
 
-async def async_main() -> None:
+async def async_main(args: argparse.Namespace) -> None:
     """Async main entry point."""
+    # Apply CLI overrides to config
+    if args.provider:
+        set_provider(args.provider, args.model)
+    elif args.model:
+        # Model override without provider change
+        config = get_config()
+        set_provider(config.provider, args.model)
+
+    # Show provider info
+    config = get_config()
+    provider_info = f"[dim]Using {config.provider}"
+    if config.provider == "ollama":
+        provider_info += f" ({config.ollama_model})"
+    else:
+        provider_info += f" ({config.claude_model})"
+    provider_info += "[/dim]"
+
     console.print("[bold green]Portfolio Copilot[/bold green]")
+    console.print(provider_info)
     console.print("Type 'help' for commands, or ask me about your portfolio!\n")
 
     # Command handlers
@@ -527,7 +568,8 @@ async def async_main() -> None:
 
 def main() -> None:
     """Main CLI entry point."""
-    asyncio.run(async_main())
+    args = parse_args()
+    asyncio.run(async_main(args))
 
 
 if __name__ == "__main__":

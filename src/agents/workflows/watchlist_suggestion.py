@@ -2,20 +2,13 @@
 
 import logging
 import operator
-import os
 from typing import Annotated, Any, TypedDict
 
-from anthropic import Anthropic
-from dotenv import load_dotenv
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
 
 from src.agents.tools.news_tools import get_news_context_string
 from src.mcp.kite_client import KiteClient
-
-load_dotenv()
-
-MODEL = "claude-sonnet-4-20250514"
 
 
 def replace_value(current: Any, new: Any) -> Any:
@@ -86,14 +79,6 @@ SECTOR_SUGGESTIONS = {
     "Cement": ["ULTRACEMCO", "SHREECEM", "AMBUJACEM", "ACC"],
     "Auto Ancillary": ["GABRIEL", "MOTHERSON", "BOSCHLTD", "MRF"],
 }
-
-
-def _get_anthropic() -> Anthropic:
-    """Get Anthropic client."""
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise ValueError("ANTHROPIC_API_KEY not set")
-    return Anthropic(api_key=api_key)
 
 
 # Node functions
@@ -227,8 +212,8 @@ async def fetch_news_node(state: WatchlistState) -> dict[str, Any]:
         }
 
 
-def generate_suggestions_node(state: WatchlistState) -> dict[str, Any]:
-    """Node: Generate watchlist suggestions using Claude."""
+async def generate_suggestions_node(state: WatchlistState) -> dict[str, Any]:
+    """Node: Generate watchlist suggestions using LLM."""
     query = state.get("query", "")
     current_holdings = state.get("current_holdings", [])
     current_sectors = state.get("current_sectors", [])
@@ -281,14 +266,16 @@ Format as a clear, actionable watchlist. Keep it under 400 words.
 IMPORTANT: This is NOT investment advice. Remind the user to do their own research."""
 
     try:
-        anthropic = _get_anthropic()
-        response = anthropic.messages.create(
-            model=MODEL,
-            max_tokens=1200,
+        from src.llm.factory import get_simple_provider
+
+        provider = get_simple_provider()
+        suggestions = await provider.complete(
             messages=[{"role": "user", "content": prompt}],
+            max_tokens=1200,
         )
 
-        suggestions = response.content[0].text
+        if not suggestions:
+            suggestions = "Error: Empty response from AI model"
 
     except Exception as e:
         suggestions = f"Error generating suggestions: {e}"
