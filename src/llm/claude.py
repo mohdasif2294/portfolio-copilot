@@ -3,7 +3,9 @@
 import json
 import logging
 import os
+import re
 from collections.abc import AsyncIterator
+from datetime import datetime
 from typing import Any
 
 from anthropic import Anthropic, AsyncAnthropic
@@ -19,6 +21,29 @@ from src.mcp.kite_client import KiteClient
 load_dotenv()
 
 MAX_TOKENS = 4096
+MAX_TOOL_ROUNDS = 10
+
+ALLOWED_TOOLS = {
+    "get_holdings", "get_positions", "get_margins",
+    "get_quotes", "get_ltp", "search_instruments",
+    "search_news", "ingest_stock_news", "get_corporate_events",
+}
+
+_SENSITIVE_PATTERNS = [
+    (re.compile(r'sk-ant-[A-Za-z0-9_-]+'), '[REDACTED_API_KEY]'),
+    (re.compile(r'Bearer\s+[A-Za-z0-9_.-]+'), 'Bearer [REDACTED]'),
+    (re.compile(r'"(access_token|request_token|enctoken)"\s*:\s*"[^"]*"'), r'"\1": "[REDACTED]"'),
+    (re.compile(r'"(api_key|api_secret)"\s*:\s*"[^"]*"'), r'"\1": "[REDACTED]"'),
+    (re.compile(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+'), '[REDACTED_EMAIL]'),
+    (re.compile(r'"user_id"\s*:\s*"[^"]*"'), '"user_id": "[REDACTED]"'),
+]
+
+
+def _scrub_sensitive_data(text: str) -> str:
+    """Redact sensitive patterns from text before sending to LLM."""
+    for pattern, replacement in _SENSITIVE_PATTERNS:
+        text = pattern.sub(replacement, text)
+    return text
 
 SYSTEM_PROMPT = """You are Portfolio Copilot, an AI assistant that helps users understand and analyze their stock portfolio on Zerodha Kite.
 
@@ -43,6 +68,12 @@ When presenting holdings or positions:
 - Show symbol, quantity, average price, current price, and P&L
 - Calculate and highlight total portfolio value and overall P&L
 - Identify best and worst performers when relevant
+
+IMPORTANT CONSTRAINTS:
+- You are NOT a financial advisor. Always remind users that your analysis is informational only, not investment advice.
+- NEVER suggest placing, modifying, or canceling orders. You are a read-only analysis tool.
+- Always show data timestamps so users know how fresh the information is.
+- When presenting financial figures, use the pre-calculated summary values. Never recalculate them.
 """
 
 
@@ -280,6 +311,10 @@ class PortfolioAssistant:
 
     async def _execute_tool(self, name: str, args: dict[str, Any]) -> str:
         """Execute a tool and return the result as JSON string."""
+        if name not in ALLOWED_TOOLS:
+            logger.warning(f"Blocked disallowed tool call: {name}")
+            return json.dumps({"error": f"Tool '{name}' is not permitted. Only read-only analysis tools are allowed."})
+
         try:
             # Portfolio tools (Kite MCP)
             if name == "get_holdings":
@@ -299,11 +334,10 @@ class PortfolioAssistant:
                         h.get("quantity", 0) * h.get("day_change", 0)
                         for h in holdings
                     )
-                    logger.info(
-                        f"Holdings: {len(holdings)} stocks, "
-                        f"Investment: ₹{total_investment:,.2f}, "
-                        f"Current: ₹{total_current:,.2f}, "
-                        f"P&L: ₹{total_pnl:,.2f}"
+                    logger.info(f"Holdings: {len(holdings)} stocks fetched")
+                    logger.debug(
+                        f"Holdings detail - Investment: ₹{total_investment:,.2f}, "
+                        f"Current: ₹{total_current:,.2f}, P&L: ₹{total_pnl:,.2f}"
                     )
                     # Return holdings with pre-calculated summary
                     result = {
@@ -369,6 +403,12 @@ class PortfolioAssistant:
             else:
                 return json.dumps({"error": f"Unknown tool: {name}"})
 
+            # Add data freshness timestamp
+            if isinstance(result, dict):
+                result["fetched_at"] = datetime.now().isoformat()
+            elif isinstance(result, list):
+                result = {"data": result, "fetched_at": datetime.now().isoformat()}
+
             return json.dumps(result, default=str)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -384,8 +424,13 @@ class PortfolioAssistant:
 
         # Check if provider is Claude (native tool calling) or Ollama (prompt-based)
         is_claude = isinstance(self._provider, ClaudeProvider)
+        tool_rounds = 0
 
         while True:
+            if tool_rounds >= MAX_TOOL_ROUNDS:
+                yield StreamEvent(type="text", text="\n\n[Tool call limit reached. Please refine your query.]")
+                yield StreamEvent(type="done")
+                return
             if is_claude:
                 # Claude: Use native streaming with tool calling
                 async for event in self._stream_claude():
@@ -395,6 +440,7 @@ class PortfolioAssistant:
 
                 # Check if we need to handle tool calls
                 if self._pending_tool_calls:
+                    tool_rounds += 1
                     await self._handle_tool_calls()
                     continue
                 return
@@ -407,6 +453,7 @@ class PortfolioAssistant:
 
                 # Check if we need to handle tool calls
                 if self._pending_tool_calls:
+                    tool_rounds += 1
                     await self._handle_tool_calls()
                     continue
                 return
@@ -503,6 +550,7 @@ class PortfolioAssistant:
 
         for tc in self._pending_tool_calls:
             result = await self._execute_tool(tc.name, tc.input)
+            result = _scrub_sensitive_data(result)
             tool_results.append({
                 "type": "tool_result",
                 "tool_use_id": tc.id,

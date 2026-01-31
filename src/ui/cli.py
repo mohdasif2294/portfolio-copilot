@@ -196,9 +196,17 @@ async def handle_whoami(client: KiteClient, _assistant: PortfolioAssistant) -> N
             if await client.is_logged_in():
                 profile = await client.get_profile()
                 console.print("\n[bold]Login Status:[/bold] [green]Logged In[/green]")
-                console.print(f"  User ID: {profile.get('user_id', 'N/A')}")
+                user_id = profile.get('user_id', 'N/A')
+                masked_id = user_id[:2] + '***' + user_id[-1] if len(user_id) > 3 else '***'
+                email = profile.get('email', 'N/A')
+                if '@' in email:
+                    local, domain = email.split('@', 1)
+                    masked_email = local[:3] + '***@' + domain
+                else:
+                    masked_email = email
+                console.print(f"  User ID: {masked_id}")
                 console.print(f"  Name: {profile.get('user_name', 'N/A')}")
-                console.print(f"  Email: {profile.get('email', 'N/A')}")
+                console.print(f"  Email: {masked_email}")
                 console.print(f"  Broker: {profile.get('broker', 'N/A')}")
                 console.print()
             else:
