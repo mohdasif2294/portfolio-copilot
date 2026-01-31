@@ -152,7 +152,7 @@ The system uses specialized AI agents for different tasks:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│              User Interface Layer                            │
+│              User Interface Layer                           │
 │  ┌─────────────────────┐    ┌─────────────────────┐         │
 │  │  Web UI (Streamlit) │    │   CLI (Rich)        │         │
 │  │  - Chat interface   │    │   - Commands        │         │
@@ -162,8 +162,8 @@ The system uses specialized AI agents for different tasks:
 └──────────────────────────┬──────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
-│                   Agent Orchestrator                         │
-│            (Query detection & routing)                       │
+│                   Agent Orchestrator                        │
+│            (Query detection & routing)                      │
 └────────┬─────────────┬─────────────┬─────────────┬──────────┘
          │             │             │             │
          ▼             ▼             ▼             ▼
@@ -175,9 +175,9 @@ The system uses specialized AI agents for different tasks:
        │            │             │             │             │
        └────────────┴──────┬──────┴─────────────┴─────────────┘
                            │
-       ┌───────────────┬───┼───────────────┐
-       │               │   │               │
-       ▼               ▼   ▼               ▼
+       ┌───────────────┬───┼──────────────-----------─┐
+       │               │              │               │
+       ▼               ▼              ▼               ▼
 ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
 │  Kite MCP   │ │ RAG System  │ │ Screener.in │ │  BSE India  │
 │  (Holdings, │ │ (ChromaDB + │ │ (Fundamental│ │ (Corporate  │
