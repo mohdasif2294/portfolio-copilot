@@ -35,7 +35,7 @@ should_use, agent_type = orchestrator.should_use_agent("Is TCS a good buy?")
 Executes the specified agent workflow.
 
 **Parameters:**
-- `agent_type`: One of "portfolio_analysis", "stock_research", "market_context", "watchlist", "fundamental_analysis"
+- `agent_type`: One of "portfolio_analysis", "stock_research", "market_context", "watchlist", "fundamental_analysis", "stock_events"
 - `query`: User's query
 
 **Returns:**
@@ -201,6 +201,142 @@ Generates watchlist suggestions.
 
 **Returns:**
 - Markdown formatted suggestions
+
+---
+
+### StockEventsAgent
+
+Fetches corporate events (board meetings, dividends, acquisitions, earnings, etc.) from BSE India.
+
+```python
+from src.agents.workflows.stock_events import StockEventsAgent
+
+agent = StockEventsAgent(kite_client)  # kite_client optional, needed for portfolio-wide queries
+```
+
+#### Methods
+
+##### `async get_events(query: str, symbol: str | None = None) -> list[dict]`
+
+Fetches corporate events for a stock or portfolio.
+
+**Parameters:**
+- `query`: User's query (e.g., "events for Reliance", "show events of my portfolio")
+- `symbol`: Optional explicit stock symbol
+
+**Returns:**
+```python
+[
+    {
+        "title": "Board Meeting Outcome for Q3 Results",
+        "category": "board_meeting",  # board_meeting, dividend, acquisition, merger, earnings, govt_policy, other
+        "date": "2026-01-16",
+        "url": "https://www.bseindia.com/xml-data/corpfiling/AttachLive/...",
+        "symbol": "RELIANCE",
+    },
+    ...
+]
+```
+
+**Example:**
+```python
+# Single stock
+events = await agent.get_events("events for TCS", symbol="TCS")
+
+# Portfolio-wide (requires kite_client)
+events = await agent.get_events("show events of stocks from my portfolio")
+```
+
+##### `async get_events_formatted(query: str, symbol: str | None = None) -> str`
+
+Same as `get_events` but returns a formatted text summary.
+
+---
+
+### BSEScraper
+
+Scrapes corporate announcements from BSE India.
+
+```python
+from src.data.scrapers.bse import BSEScraper, CorporateEvent, get_scrip_code
+
+scraper = BSEScraper()
+events = await scraper.get_corporate_events("RELIANCE", limit=20)
+await scraper.close()
+```
+
+#### Methods
+
+##### `async get_corporate_events(symbol: str, limit: int = 20) -> list[CorporateEvent]`
+
+Fetches corporate events from BSE.
+
+**Parameters:**
+- `symbol`: NSE/BSE ticker symbol (e.g., "RELIANCE", "TCS") — automatically resolved to BSE scrip code
+- `limit`: Maximum events to return
+
+**Returns:**
+```python
+@dataclass
+class CorporateEvent:
+    title: str          # Announcement title
+    category: str       # Classified category
+    description: str    # Headline/description
+    url: str            # Link to BSE PDF attachment
+    date: datetime      # Announcement date
+    symbol: str         # Stock symbol
+    source: str = "bse"
+```
+
+#### Utility Functions
+
+##### `get_scrip_code(symbol: str) -> str`
+
+Resolves an NSE ticker symbol to a BSE scrip code.
+
+```python
+get_scrip_code("RELIANCE")  # → "500325"
+get_scrip_code("DIXON")     # → "540699"
+```
+
+##### `categorize_event(title: str) -> str`
+
+Classifies an event title into a category using keyword matching.
+
+```python
+categorize_event("Board Meeting Outcome")     # → "board_meeting"
+categorize_event("Interim Dividend Declared")  # → "dividend"
+categorize_event("Q3 Financial Results")       # → "earnings"
+```
+
+---
+
+### Symbol Resolution
+
+Dynamic stock symbol resolution across all NSE-listed equities.
+
+```python
+from src.agents.tools.symbol_tools import (
+    extract_symbol,
+    is_valid_symbol,
+    refresh_nse_symbols,
+    NAME_TO_SYMBOL,
+)
+
+# Extract from natural language
+extract_symbol("events for Dixon Technologies")  # → "DIXON"
+extract_symbol("Is 3M India a good buy?")        # → "3MINDIA"
+
+# Validate a symbol
+is_valid_symbol("RELIANCE")  # True
+is_valid_symbol("FAKESYM")   # False
+
+# Force refresh (re-downloads from NSE)
+count = refresh_nse_symbols()  # → 2229
+
+# Full mapping (lazy-loaded)
+len(NAME_TO_SYMBOL)  # ~4000+ entries (manual aliases + NSE names)
+```
 
 ---
 

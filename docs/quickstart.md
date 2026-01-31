@@ -103,6 +103,18 @@ You> Is TCS a good buy?
 You> Why is my portfolio down today?
 ```
 
+### View Corporate Events
+```
+You> events
+Stock symbol (e.g., RELIANCE): TCS
+```
+
+Or use natural language:
+```
+You> Show events for Reliance
+You> Any board meetings for Infosys?
+```
+
 ### Get Watchlist Suggestions
 ```
 You> Suggest stocks for my watchlist
@@ -128,6 +140,7 @@ You> Suggest stocks for my watchlist
 | `analyze` | Analyze portfolio |
 | `research` | Research a stock |
 | `fundamentals` | Check if stock is good/bad |
+| `events` | Corporate events from BSE (dividends, board meetings, etc.) |
 | `context` | Explain market movements |
 | `watchlist` | Get stock suggestions |
 | `ingest` | Index news articles |
@@ -148,6 +161,8 @@ You> Why did my portfolio drop today?
 You> What stocks should I add to my watchlist?
 You> Is Reliance overvalued?
 You> Give me the fundamentals of TCS
+You> Show events for Dixon Technologies
+You> Any dividend announcements for HDFC Bank?
 ```
 
 ## Indexing News (Optional)

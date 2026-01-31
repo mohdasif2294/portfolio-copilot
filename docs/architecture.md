@@ -103,8 +103,39 @@ class AgentOrchestrator:
 | `market_context` | Market movement explanation | "why portfolio down", "market today" |
 | `watchlist` | Stock suggestions | "suggest stocks", "what to buy" |
 | `fundamental_analysis` | Fundamental evaluation | "is X good buy", "fundamentals of X" |
+| `stock_events` | Corporate events from BSE | "events for X", "board meetings", "dividends" |
 
 ### 3. Agent Workflows (`src/agents/workflows/`)
+
+#### Stock Events Flow
+
+```
+"Show events for TCS"
+         │
+         ▼
+┌─────────────────────┐
+│ extract_symbol_node  │  → symbol = "TCS" (or "__PORTFOLIO__")
+└──────────┬──────────┘
+           │
+           ▼
+┌──────────────────────────┐
+│ resolve_portfolio_node   │  → For portfolio queries: Kite MCP → list of symbols
+└──────────┬───────────────┘    For single-stock: passthrough
+           │
+           ▼
+┌─────────────────────┐
+│ fetch_events_node   │  → BSE API (scrip code lookup → announcements)
+└──────────┬──────────┘    Returns categorized events
+           │
+           ▼
+┌─────────────────────┐
+│ format_output_node  │  → Structured event list (no LLM needed)
+└──────────┬──────────┘
+           │
+           ▼
+    CLI: Rich Table with Symbol, Date, Category, Title, Link
+    Web: HTML table with color-coded category badges
+```
 
 Each agent is a LangGraph state machine with nodes and edges.
 
@@ -219,7 +250,60 @@ class TokenChunker:
         # Split into overlapping chunks for context preservation
 ```
 
-### 6. Screener.in Scraper (`src/data/scrapers/screener.py`)
+### 6. BSE Corporate Events Scraper (`src/data/scrapers/bse.py`)
+
+Fetches corporate announcements from BSE India's API.
+
+```python
+@dataclass
+class CorporateEvent:
+    title: str
+    category: str       # board_meeting, dividend, acquisition, merger, earnings, govt_policy, other
+    description: str
+    url: str            # Link to BSE PDF attachment
+    date: datetime
+    symbol: str
+    source: str = "bse"
+
+class BSEScraper:
+    async def get_corporate_events(self, symbol: str, limit: int = 20) -> list[CorporateEvent]:
+        scrip = get_scrip_code(symbol)  # Dynamic lookup via BSE bhav copy
+        # Calls BSE AnnSubCategoryGetData API
+```
+
+**Dynamic Scrip Code Resolution:**
+- BSE API requires numeric scrip codes (e.g., `500325` for RELIANCE)
+- Scrip codes are fetched from BSE's daily bhav copy CSV (`BhavCopy_BSE_CM_*.CSV`)
+- Cached in `data/bse_scrip_codes.json` for 1 week (~4800 stocks)
+- Falls back over 7 days to handle weekends/holidays
+
+**Event Categorization:**
+- Keyword-based classification into 7 categories
+- Categories have color coding for CLI (Rich) and Web (HTML badges)
+
+### 7. Dynamic Symbol Resolution (`src/agents/tools/symbol_tools.py`)
+
+Resolves company names, abbreviations, and stock symbols across all NSE-listed equities.
+
+```python
+# Resolves any of these to the correct NSE symbol:
+extract_symbol("events for Dixon Technologies")  # → "DIXON"
+extract_symbol("Is 3M India a good buy?")        # → "3MINDIA"
+extract_symbol("tell me about Reliance")         # → "RELIANCE"
+```
+
+**How it works:**
+1. **Manual aliases** (~150 entries): Short names like "airtel" → `BHARTIARTL`, "hul" → `HINDUNILVR`
+2. **NSE equity list** (2200+ stocks): Fetched from `nsearchives.nseindia.com`, cached in `data/nse_symbols.json` for 1 week
+3. **Auto-generated sub-names**: Strips "Limited", "Ltd", "Industries Limited" suffixes
+4. **Strategy cascade**: Exchange prefix → name mapping → NSE symbol validation → uppercase detection → fallback
+
+```python
+is_valid_symbol("DIXON")      # True — validates against full NSE list
+refresh_nse_symbols()          # Force re-fetch from NSE
+```
+
+### 8. Screener.in Scraper (`src/data/scrapers/screener.py`)
 
 Web scraper for fundamental data.
 

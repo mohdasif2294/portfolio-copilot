@@ -19,6 +19,7 @@
 | 📈 | **Market Context** | Understand why your portfolio moved today |
 | 💰 | **Fundamental Analysis** | Buy/hold/sell recommendations using screener.in data |
 | 👀 | **Watchlist Suggestions** | Discover stocks based on your investment style |
+| 📅 | **Corporate Events** | Board meetings, dividends, acquisitions, earnings from BSE |
 
 ## Quick Start
 
@@ -117,6 +118,8 @@ You> Tell me about Reliance
 You> Why is my portfolio down today?
 You> Is TCS a good buy?
 You> Suggest stocks for my watchlist
+You> Show events for Reliance
+You> Any board meetings for Infosys?
 ```
 
 ### Commands
@@ -128,6 +131,7 @@ You> Suggest stocks for my watchlist
 | `analyze` | Portfolio analysis |
 | `research` | Stock research |
 | `fundamentals` | Fundamental analysis |
+| `events` | Corporate events from BSE |
 | `ingest` | Index news articles |
 | `help` | Show all commands |
 
@@ -142,6 +146,7 @@ The system uses specialized AI agents for different tasks:
 | 📈 **Market Context** | Explains why your portfolio moved using market news and trends |
 | 👀 **Watchlist Suggestion** | Recommends stocks based on your current sectors and blue chips |
 | 💰 **Fundamental Analysis** | Evaluates stocks using screener.in metrics (P/E, ROE, debt) with buy/hold/sell scores |
+| 📅 **Corporate Events** | Fetches board meetings, dividends, acquisitions, earnings announcements from BSE India |
 
 ## Architecture
 
@@ -162,22 +167,22 @@ The system uses specialized AI agents for different tasks:
 └────────┬─────────────┬─────────────┬─────────────┬──────────┘
          │             │             │             │
          ▼             ▼             ▼             ▼
+┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐
+│ Portfolio │ │  Stock    │ │  Market   │ │Fundamental│ │  Stock    │
+│ Analysis  │ │ Research  │ │  Context  │ │ Analysis  │ │  Events   │
+│  Agent    │ │  Agent    │ │  Agent    │ │  Agent    │ │  Agent    │
+└───────────┘ └───────────┘ └───────────┘ └───────────┘ └───────────┘
+       │            │             │             │             │
+       └────────────┴──────┬──────┴─────────────┴─────────────┘
+                           │
+       ┌───────────────┬───┼───────────────┐
+       │               │   │               │
+       ▼               ▼   ▼               ▼
 ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
-│  Portfolio  │ │   Stock     │ │   Market    │ │ Fundamental │
-│  Analysis   │ │  Research   │ │   Context   │ │  Analysis   │
-│   Agent     │ │   Agent     │ │   Agent     │ │   Agent     │
+│  Kite MCP   │ │ RAG System  │ │ Screener.in │ │  BSE India  │
+│  (Holdings, │ │ (ChromaDB + │ │ (Fundamental│ │ (Corporate  │
+│   Quotes)   │ │  News)      │ │  Data)      │ │  Events)    │
 └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘
-         │             │             │             │
-         └─────────────┴──────┬──────┴─────────────┘
-                              │
-         ┌────────────────────┼────────────────────┐
-         │                    │                    │
-         ▼                    ▼                    ▼
-┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│   Kite MCP      │  │   RAG System    │  │  Screener.in    │
-│   (Holdings,    │  │   (ChromaDB +   │  │   (Fundamental  │
-│    Quotes)      │  │    News)        │  │    Data)        │
-└─────────────────┘  └─────────────────┘  └─────────────────┘
                               │
                               ▼
                     ┌─────────────────┐
@@ -206,6 +211,8 @@ The system uses specialized AI agents for different tasks:
 | Web UI | Streamlit |
 | CLI | Rich |
 | Web Scraping | BeautifulSoup4, httpx |
+| Market Data | BSE India API (corporate events) |
+| Symbol Resolution | NSE equity list (2200+ stocks, auto-cached) |
 
 ## Why This Project?
 
