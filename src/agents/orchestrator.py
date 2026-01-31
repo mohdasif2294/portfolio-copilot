@@ -6,6 +6,7 @@ from typing import Any
 from src.agents.workflows.fundamental_analysis import FundamentalAnalysisAgent
 from src.agents.workflows.market_context import MarketContextAgent
 from src.agents.workflows.portfolio_analysis import PortfolioAnalysisAgent
+from src.agents.workflows.stock_events import StockEventsAgent
 from src.agents.workflows.stock_research import StockResearchAgent
 from src.agents.workflows.watchlist_suggestion import WatchlistAgent
 from src.mcp.kite_client import KiteClient
@@ -21,6 +22,7 @@ class AgentOrchestrator:
         self._context_agent = MarketContextAgent(kite_client)
         self._watchlist_agent = WatchlistAgent(kite_client)
         self._fundamental_agent = FundamentalAnalysisAgent(kite_client)
+        self._events_agent = StockEventsAgent(kite_client)
 
     def should_use_agent(self, query: str) -> tuple[bool, str | None]:
         """Determine if query should trigger an agent workflow.
@@ -58,6 +60,9 @@ class AgentOrchestrator:
             r"market\s+(context|overview|summary|update)",
             r"explain\s+(today|the)\s*(market|movement|change)",
             r"(portfolio|market)\s+(drop|crash|rally|surge)",
+            r"how\s+(is|are|was|did)\s+(the\s+)?market",
+            r"(what|how).*(market|nifty|sensex)\s*(today|doing|going|looking)",
+            r"market\s+(today|now|status)",
         ]
 
         for pattern in context_patterns:
@@ -78,6 +83,16 @@ class AgentOrchestrator:
         for pattern in watchlist_patterns:
             if re.search(pattern, query_lower):
                 return True, "watchlist"
+
+        # Stock Events patterns
+        events_patterns = [
+            r"(events?|corporate\s+action|announcement|board\s+meeting|dividend|merger|acquisition|earning)",
+            r"(what|any|show|get)\s+(events?|announcements?)\s+(for|on|about|around)\s+\w+",
+        ]
+
+        for pattern in events_patterns:
+            if re.search(pattern, query_lower):
+                return True, "stock_events"
 
         # Fundamental Analysis patterns (check before stock_research as it's more specific)
         fundamental_patterns = [
@@ -162,6 +177,15 @@ class AgentOrchestrator:
                 "agent_used": "Fundamental Analysis Agent",
             }
 
+        elif agent_type == "stock_events":
+            events = await self._events_agent.get_events(query)
+            formatted = await self._events_agent.get_events_formatted(query)
+            return {
+                "response": formatted,
+                "events": events,
+                "agent_used": "Stock Events Agent",
+            }
+
         return {
             "response": "Unknown agent type",
             "agent_used": None,
@@ -190,6 +214,7 @@ class AgentOrchestrator:
                 "market_context",
                 "watchlist",
                 "fundamental_analysis",
+                "stock_events",
             }
             
             if force_agent not in valid_agent_types:
@@ -274,5 +299,12 @@ AGENT_TRIGGERS = {
         "Is ITC a good investment?",
         "Check financials of Infosys",
         "PE ratio of Wipro",
+    ],
+    "stock_events": [
+        "Show events for Reliance",
+        "Corporate announcements for TCS",
+        "Any board meetings for INFY?",
+        "Dividend announcements",
+        "Events for HDFC Bank",
     ],
 }

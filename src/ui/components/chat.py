@@ -83,7 +83,12 @@ def _render_chat_history() -> None:
 
     for message in history:
         with st.chat_message(message.role):
-            st.markdown(message.content)
+            # Re-render events table from metadata if available
+            events = (message.metadata or {}).get("events") if message.metadata else None
+            if events:
+                _render_events_table(events)
+            else:
+                st.markdown(message.content)
             if message.agent_used:
                 st.caption(f"Handled by: {message.agent_used}")
 
@@ -137,10 +142,18 @@ def _handle_agent_query(
         response = result.get("response", "No response from agent.")
         agent_used = result.get("agent_used", agent_name)
 
-        st.markdown(response)
+        # Render events as a styled table in Streamlit
+        if agent_type == "stock_events" and result.get("events"):
+            _render_events_table(result["events"])
+        else:
+            st.markdown(response)
+
         st.caption(f"Handled by: {agent_used}")
 
-        SessionManager.add_message("assistant", response, agent_used)
+        SessionManager.add_message(
+            "assistant", response, agent_used,
+            metadata={"events": result.get("events")} if agent_type == "stock_events" else None,
+        )
 
     except AuthenticationError:
         error_msg = "Please login to Kite first to access your portfolio data."
@@ -190,6 +203,76 @@ def _handle_regular_chat(query: str, assistant: PortfolioAssistant) -> None:
         SessionManager.add_message("assistant", error_msg)
 
 
+def _render_events_table(events: list[dict]) -> None:
+    """Render corporate events as a styled Streamlit table.
+
+    Args:
+        events: List of event dicts with title, category, date, url, symbol
+    """
+    import pandas as pd
+    from src.data.scrapers.bse import CATEGORY_COLORS
+
+    if not events:
+        st.info("No corporate events found.")
+        return
+
+    # Determine title from events
+    symbols = {e.get("symbol", "") for e in events}
+    title = f"Corporate Events: {', '.join(sorted(symbols))}" if symbols else "Corporate Events"
+    st.subheader(title)
+
+    # Category color mapping for styled badges
+    _CAT_BADGE_COLORS = {
+        "board_meeting": "#f59e0b",
+        "dividend": "#10b981",
+        "acquisition": "#a855f7",
+        "merger": "#3b82f6",
+        "earnings": "#06b6d4",
+        "govt_policy": "#ef4444",
+        "other": "#6b7280",
+    }
+
+    # Build HTML table
+    rows_html = ""
+    for i, e in enumerate(events, 1):
+        cat = e.get("category", "other")
+        cat_color = _CAT_BADGE_COLORS.get(cat, "#6b7280")
+        cat_label = cat.replace("_", " ").title()
+        url = e.get("url", "")
+        link_html = f'<a href="{url}" target="_blank">BSE&nbsp;↗</a>' if url else "—"
+
+        rows_html += f"""<tr style="border-bottom:1px solid #3333;">
+            <td style="padding:8px 8px;text-align:right;color:#888;">{i}</td>
+            <td style="padding:8px 8px;"><strong>{e.get('symbol', '')}</strong></td>
+            <td style="padding:8px 8px;white-space:nowrap;">{e.get('date', 'N/A')}</td>
+            <td style="padding:8px 8px;"><span style="background:{cat_color};color:white;padding:2px 8px;border-radius:10px;font-size:0.8em;white-space:nowrap;">{cat_label}</span></td>
+            <td style="padding:8px 8px;">{e.get('title', '')}</td>
+            <td style="padding:8px 8px;text-align:center;">{link_html}</td>
+        </tr>"""
+
+    table_html = f"""
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:0.9em;">
+        <thead>
+            <tr style="border-bottom:2px solid #555;text-align:left;">
+                <th style="padding:10px 8px;width:30px;">#</th>
+                <th style="padding:10px 8px;">Symbol</th>
+                <th style="padding:10px 8px;">Date</th>
+                <th style="padding:10px 8px;">Category</th>
+                <th style="padding:10px 8px;">Title</th>
+                <th style="padding:10px 8px;text-align:center;">Link</th>
+            </tr>
+        </thead>
+        <tbody style="border-top:1px solid #333;">
+            {rows_html}
+        </tbody>
+    </table>
+    </div>
+    """
+
+    st.markdown(table_html, unsafe_allow_html=True)
+
+
 def render_empty_chat_state() -> None:
     """Render the empty state when no chat history exists."""
     st.markdown(
@@ -202,6 +285,7 @@ def render_empty_chat_state() -> None:
         - **Market Context**: Learn why your portfolio moved
         - **Watchlist Suggestions**: Discover stocks to watch
         - **Fundamental Analysis**: Evaluate if a stock is worth buying
+        - **Corporate Events**: Board meetings, dividends, earnings announcements
 
         **Get started** by clicking a suggestion below or typing your question!
         """

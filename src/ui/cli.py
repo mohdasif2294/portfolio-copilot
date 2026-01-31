@@ -366,6 +366,72 @@ async def handle_fundamentals(client: KiteClient, _assistant: PortfolioAssistant
     console.print()
 
 
+async def handle_events(_client: KiteClient, _assistant: PortfolioAssistant) -> None:
+    """Fetch and display corporate events for a stock."""
+    from src.agents.workflows.stock_events import StockEventsAgent
+    from src.data.scrapers.bse import CATEGORY_COLORS
+
+    symbol = Prompt.ask("Stock symbol (e.g., RELIANCE)")
+    if not symbol:
+        return
+
+    agent = StockEventsAgent()
+
+    with console.status("[bold green]Fetching corporate events from BSE..."):
+        events = await agent.get_events(f"events for {symbol}", symbol=symbol.strip().upper())
+
+    if not events:
+        console.print(f"[yellow]No corporate events found for {symbol.upper()}.[/yellow]")
+        return
+
+    _display_events_table(events, symbol.strip().upper())
+
+
+def _display_events_table(events: list[dict], symbol: str) -> None:
+    """Render corporate events as a Rich table."""
+    from src.data.scrapers.bse import CATEGORY_COLORS
+
+    width = max(console.width, 120)
+    table = Table(
+        title=f"Corporate Events: {symbol}",
+        show_lines=True,
+        title_style="bold magenta",
+        padding=(0, 1),
+        width=width,
+    )
+    table.add_column("#", style="dim", width=3, justify="right")
+    table.add_column("Symbol", style="cyan bold", width=12, no_wrap=True)
+    table.add_column("Date", width=10, no_wrap=True)
+    table.add_column("Category", width=14, no_wrap=True)
+    table.add_column("Title", ratio=1, no_wrap=True, overflow="ellipsis")
+    table.add_column("Link", width=6, justify="center", no_wrap=True)
+
+    for i, e in enumerate(events, 1):
+        cat = e.get("category", "other")
+        color = CATEGORY_COLORS.get(cat, "dim")
+        cat_display = f"[{color}]{cat.replace('_', ' ').title()}[/{color}]"
+
+        url = e.get("url", "")
+        if url:
+            link = f"[link={url}][blue underline]BSE ↗[/blue underline][/link]"
+        else:
+            link = "[dim]—[/dim]"
+
+        table.add_row(
+            str(i),
+            e.get("symbol", ""),
+            e.get("date", "N/A"),
+            cat_display,
+            e.get("title", ""),
+            link,
+        )
+
+    console.print(table)
+    console.print(
+        "[dim]Tip: Links are clickable in supported terminals (iTerm2, Warp, etc.)[/dim]\n"
+    )
+
+
 async def handle_status(_client: KiteClient, _assistant: PortfolioAssistant) -> None:
     """Show status of the vector store."""
     from src.rag.vector_store import get_vector_store
@@ -430,6 +496,7 @@ def show_help() -> None:
   context     - Run market context agent
   watchlist   - Run watchlist suggestion agent
   fundamentals - Run fundamental analysis (screener.in)
+  events      - Show corporate events from BSE (board meetings, dividends, etc.)
   ingest      - Fetch and index news articles
   search      - Search indexed news articles
   status      - Show vector store status
@@ -444,6 +511,7 @@ def show_help() -> None:
   Context:      "Why is my portfolio down?", "market today"
   Watchlist:    "Suggest stocks to watch", "what should I buy"
   Fundamentals: "Is Reliance a good buy?", "fundamentals of TCS"
+  Events:       "Show events for Reliance", "corporate announcements"
 
 [bold]Or just ask anything about your portfolio![/bold]
         """
@@ -470,7 +538,15 @@ async def handle_chat(
             result = await orchestrator.run_agent(agent_type, user_input)
 
         console.print()
-        console.print(Markdown(result["response"]))
+
+        # Render events as a Rich table if available
+        if agent_type == "stock_events" and result.get("events"):
+            from src.agents.tools.symbol_tools import extract_symbol as _ext_sym
+            sym = _ext_sym(user_input) or "Portfolio"
+            _display_events_table(result["events"], sym.upper())
+        else:
+            console.print(Markdown(result["response"]))
+
         console.print()
         return
 
@@ -545,6 +621,7 @@ async def async_main(args: argparse.Namespace) -> None:
         "context": handle_context,
         "watchlist": handle_watchlist,
         "fundamentals": handle_fundamentals,
+        "events": handle_events,
         "tools": handle_tools,
         "ingest": handle_ingest,
         "search": handle_search,

@@ -13,6 +13,7 @@ class ChatMessage:
     role: str  # "user" or "assistant"
     content: str
     agent_used: str | None = None  # Which agent handled this, if any
+    metadata: dict[str, Any] | None = None  # Extra data (e.g. events list)
 
 
 @dataclass
@@ -80,12 +81,17 @@ class SessionManager:
         return st.session_state.get("chat_history", [])
 
     @staticmethod
-    def add_message(role: str, content: str, agent_used: str | None = None) -> None:
+    def add_message(
+        role: str,
+        content: str,
+        agent_used: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
         """Add a message to chat history."""
         if "chat_history" not in st.session_state:
             st.session_state.chat_history = []
         st.session_state.chat_history.append(
-            ChatMessage(role=role, content=content, agent_used=agent_used)
+            ChatMessage(role=role, content=content, agent_used=agent_used, metadata=metadata)
         )
 
     @staticmethod

@@ -151,6 +151,28 @@ RAG_TOOLS: list[dict[str, Any]] = [
 ]
 
 
+EVENTS_TOOLS: list[dict[str, Any]] = [
+    {
+        "name": "get_corporate_events",
+        "description": "Fetch corporate events and announcements for a stock from BSE India. Returns board meetings, dividends, acquisitions, mergers, earnings announcements, and government policy events.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": {
+                    "type": "string",
+                    "description": "Stock symbol (e.g., 'RELIANCE', 'TCS', 'INFY')",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of events to return (default: 20)",
+                },
+            },
+            "required": ["symbol"],
+        },
+    },
+]
+
+
 def get_all_tools() -> list[dict[str, Any]]:
     """Get all available tool definitions."""
-    return PORTFOLIO_TOOLS + RAG_TOOLS
+    return PORTFOLIO_TOOLS + RAG_TOOLS + EVENTS_TOOLS
