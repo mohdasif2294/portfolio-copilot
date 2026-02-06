@@ -211,6 +211,8 @@ The system uses specialized AI agents for different tasks:
 | Web UI | Streamlit |
 | CLI | Rich |
 | Web Scraping | BeautifulSoup4, httpx |
+| Logging | structlog (structured events, console + JSON) |
+| Observability | LangSmith (LangGraph tracing), custom tracing decorators |
 | Market Data | BSE India API (corporate events) |
 | Symbol Resolution | NSE equity list (2200+ stocks, auto-cached) |
 
