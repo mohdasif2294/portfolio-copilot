@@ -1,14 +1,16 @@
 """Watchlist Suggestion Agent workflow using LangGraph."""
 
-import logging
 import operator
 from typing import Annotated, Any, TypedDict
 
+import structlog
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
 
 from src.agents.tools.news_tools import get_news_context_string
 from src.mcp.kite_client import KiteClient
+
+log = structlog.get_logger()
 
 
 def replace_value(current: Any, new: Any) -> Any:
@@ -205,7 +207,7 @@ async def fetch_news_node(state: WatchlistState) -> dict[str, Any]:
             "steps_completed": ["fetch_news"],
         }
     except Exception as err:
-        logging.error(f"Error fetching news for symbols {symbols}: {err}")
+        log.error("news_fetch_error", symbols=symbols, error=str(err))
         return {
             "news_context": [],
             "steps_completed": ["fetch_news"],

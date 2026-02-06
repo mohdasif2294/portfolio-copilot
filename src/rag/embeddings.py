@@ -1,6 +1,5 @@
 """Embedding generation using Sentence Transformers."""
 
-import logging
 import os
 import warnings
 
@@ -17,12 +16,6 @@ warnings.filterwarnings("ignore", message=".*unauthenticated.*")
 warnings.filterwarnings("ignore", message=".*LOAD REPORT.*")
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning, module="transformers")
-
-# Suppress transformers/sentence-transformers logging noise
-logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
-logging.getLogger("transformers").setLevel(logging.ERROR)
-logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
-logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 
 # Import with suppressed output
 import transformers  # noqa: E402

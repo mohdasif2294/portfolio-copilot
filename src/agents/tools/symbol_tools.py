@@ -3,14 +3,14 @@
 import csv
 import io
 import json
-import logging
 import re
 import time
 from pathlib import Path
 
 import httpx
+import structlog
 
-logger = logging.getLogger(__name__)
+log = structlog.get_logger()
 
 _NSE_EQUITY_URL = "https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv"
 _CACHE_DIR = Path(__file__).resolve().parents[3] / "data"
@@ -217,7 +217,7 @@ def _load_nse_symbols() -> None:
             _write_cache(data)
 
     if not data:
-        logger.warning("Could not load NSE symbol list; falling back to manual aliases only")
+        log.warning("nse_symbols_load_failed", fallback="manual_aliases_only")
         _nse_loaded = True
         return
 
@@ -240,7 +240,7 @@ def _load_nse_symbols() -> None:
             _nse_name_to_symbol[short] = symbol
 
     _nse_loaded = True
-    logger.debug("Loaded %d NSE symbols", len(_nse_symbols))
+    log.debug("nse_symbols_loaded", count=len(_nse_symbols))
 
 
 def _read_cache() -> dict[str, str] | None:
@@ -253,7 +253,7 @@ def _read_cache() -> dict[str, str] | None:
             return None
         return json.loads(_CACHE_FILE.read_text())
     except Exception:
-        logger.debug("Cache read failed", exc_info=True)
+        log.debug("cache_read_failed", exc_info=True)
         return None
 
 
@@ -263,7 +263,7 @@ def _write_cache(data: dict[str, str]) -> None:
         _CACHE_DIR.mkdir(parents=True, exist_ok=True)
         _CACHE_FILE.write_text(json.dumps(data))
     except Exception:
-        logger.debug("Cache write failed", exc_info=True)
+        log.debug("cache_write_failed", exc_info=True)
 
 
 def _fetch_nse_equity_list() -> dict[str, str]:
@@ -287,10 +287,10 @@ def _fetch_nse_equity_list() -> dict[str, str]:
             if symbol and name:
                 result[symbol] = name
 
-        logger.info("Fetched %d symbols from NSE", len(result))
+        log.info("nse_fetch_complete", count=len(result))
         return result
     except Exception:
-        logger.warning("Failed to fetch NSE equity list", exc_info=True)
+        log.warning("nse_fetch_failed", exc_info=True)
         return {}
 
 

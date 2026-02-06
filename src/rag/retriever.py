@@ -2,7 +2,11 @@
 
 from dataclasses import dataclass
 
+import structlog
+
 from src.rag.vector_store import VectorStore, get_vector_store
+
+log = structlog.get_logger()
 
 
 @dataclass
@@ -58,7 +62,7 @@ class NewsRetriever:
         )
 
         # Filter by score and convert to RetrievalResult
-        retrieval_results = []
+        retrieval_results: list[RetrievalResult] = []
 
         for r in results:
             if r.score < min_score:
@@ -75,6 +79,7 @@ class NewsRetriever:
                 )
             )
 
+        log.info("rag_search", query=query[:60], top_k=top_k, symbol=symbol, results=len(retrieval_results))
         return retrieval_results
 
     def search_for_context(

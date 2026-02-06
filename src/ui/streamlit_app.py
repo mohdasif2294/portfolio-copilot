@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Streamlit web interface for Portfolio Copilot."""
 
-import logging
-
+import structlog
 import streamlit as st
+
+from src.core.logging import setup_logging
 
 from src.agents.orchestrator import AgentOrchestrator
 from src.llm.claude import PortfolioAssistant
@@ -46,7 +47,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-logger = logging.getLogger(__name__)
+setup_logging()
+log = structlog.get_logger()
 
 
 @st.cache_resource
@@ -61,10 +63,10 @@ def get_kite_client() -> KiteClient:
         run_async(client.connect(), timeout=15.0)
     except TimeoutError:
         # Connection timed out, return client anyway (will retry on use)
-        logger.exception("KiteClient.connect timed out")
+        log.error("kite_connect_timeout", exc_info=True)
     except Exception:
         # Connection failed, return client anyway (will retry on use)
-        logger.exception("KiteClient.connect failed")
+        log.error("kite_connect_failed", exc_info=True)
     return client
 
 

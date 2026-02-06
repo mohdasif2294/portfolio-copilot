@@ -3,6 +3,8 @@
 import re
 from typing import Any
 
+import structlog
+
 from src.agents.workflows.fundamental_analysis import FundamentalAnalysisAgent
 from src.agents.workflows.market_context import MarketContextAgent
 from src.agents.workflows.portfolio_analysis import PortfolioAnalysisAgent
@@ -10,6 +12,9 @@ from src.agents.workflows.stock_events import StockEventsAgent
 from src.agents.workflows.stock_research import StockResearchAgent
 from src.agents.workflows.watchlist_suggestion import WatchlistAgent
 from src.mcp.kite_client import KiteClient
+
+
+log = structlog.get_logger()
 
 
 class AgentOrchestrator:
@@ -35,6 +40,26 @@ class AgentOrchestrator:
         """
         query_lower = query.lower()
 
+        # Market Context patterns (checked BEFORE portfolio — these are more
+        # specific, requiring causal/directional words like "why", "down",
+        # "crash", "happened".  The market_context agent fetches portfolio
+        # data first, then attributes movements to market news.)
+        context_patterns = [
+            r"why\s+(is|are|did)\s+(my\s+)?(portfolio|stock|market).*(down|up|fall|drop|rise|crash)",
+            r"what\s+(happened|caused).*(market|portfolio|today)",
+            r"market\s+(context|overview|summary|update)",
+            r"explain\s+(today|the)\s*(market|movement|change)",
+            r"(portfolio|market)\s+(drop|crash|rally|surge)",
+            r"how\s+(is|are|was|did)\s+(the\s+)?market",
+            r"(what|how).*(market|nifty|sensex)\s*(today|doing|going|looking)",
+            r"market\s+(today|now|status)",
+        ]
+
+        for pattern in context_patterns:
+            if re.search(pattern, query_lower):
+                log.info("agent_routed", query=query[:80], agent_type="market_context")
+                return True, "market_context"
+
         # Portfolio Analysis patterns
         portfolio_patterns = [
             r"analyz\w*\s+(my\s+)?portfolio",
@@ -51,23 +76,8 @@ class AgentOrchestrator:
 
         for pattern in portfolio_patterns:
             if re.search(pattern, query_lower):
+                log.info("agent_routed", query=query[:80], agent_type="portfolio_analysis")
                 return True, "portfolio_analysis"
-
-        # Market Context patterns
-        context_patterns = [
-            r"why\s+(is|are|did)\s+(my\s+)?(portfolio|stock|market).*(down|up|fall|drop|rise|crash)",
-            r"what\s+(happened|caused).*(market|portfolio|today)",
-            r"market\s+(context|overview|summary|update)",
-            r"explain\s+(today|the)\s*(market|movement|change)",
-            r"(portfolio|market)\s+(drop|crash|rally|surge)",
-            r"how\s+(is|are|was|did)\s+(the\s+)?market",
-            r"(what|how).*(market|nifty|sensex)\s*(today|doing|going|looking)",
-            r"market\s+(today|now|status)",
-        ]
-
-        for pattern in context_patterns:
-            if re.search(pattern, query_lower):
-                return True, "market_context"
 
         # Watchlist patterns
         watchlist_patterns = [
@@ -82,6 +92,7 @@ class AgentOrchestrator:
 
         for pattern in watchlist_patterns:
             if re.search(pattern, query_lower):
+                log.info("agent_routed", query=query[:80], agent_type="watchlist")
                 return True, "watchlist"
 
         # Stock Events patterns
@@ -92,6 +103,7 @@ class AgentOrchestrator:
 
         for pattern in events_patterns:
             if re.search(pattern, query_lower):
+                log.info("agent_routed", query=query[:80], agent_type="stock_events")
                 return True, "stock_events"
 
         # Fundamental Analysis patterns (check before stock_research as it's more specific)
@@ -109,6 +121,7 @@ class AgentOrchestrator:
 
         for pattern in fundamental_patterns:
             if re.search(pattern, query_lower):
+                log.info("agent_routed", query=query[:80], agent_type="fundamental_analysis")
                 return True, "fundamental_analysis"
 
         # Stock Research patterns
@@ -123,6 +136,7 @@ class AgentOrchestrator:
 
         for pattern in research_patterns:
             if re.search(pattern, query_lower):
+                log.info("agent_routed", query=query[:80], agent_type="stock_research")
                 return True, "stock_research"
 
         return False, None
@@ -141,9 +155,12 @@ class AgentOrchestrator:
         Returns:
             Dict with 'response' and 'agent_used'
         """
+        log.info("agent_started", agent_type=agent_type)
+
         if agent_type == "portfolio_analysis":
             analysis_type = self._portfolio_agent.detect_analysis_type(query)
             response = await self._portfolio_agent.analyze(query, analysis_type)
+            log.info("agent_completed", agent_type=agent_type, agent_name="Portfolio Analysis Agent")
             return {
                 "response": response,
                 "agent_used": "Portfolio Analysis Agent",
@@ -151,6 +168,7 @@ class AgentOrchestrator:
 
         elif agent_type == "stock_research":
             response = await self._research_agent.research(query)
+            log.info("agent_completed", agent_type=agent_type, agent_name="Stock Research Agent")
             return {
                 "response": response,
                 "agent_used": "Stock Research Agent",
@@ -158,6 +176,7 @@ class AgentOrchestrator:
 
         elif agent_type == "market_context":
             response = await self._context_agent.explain(query)
+            log.info("agent_completed", agent_type=agent_type, agent_name="Market Context Agent")
             return {
                 "response": response,
                 "agent_used": "Market Context Agent",
@@ -165,6 +184,7 @@ class AgentOrchestrator:
 
         elif agent_type == "watchlist":
             response = await self._watchlist_agent.suggest(query)
+            log.info("agent_completed", agent_type=agent_type, agent_name="Watchlist Suggestion Agent")
             return {
                 "response": response,
                 "agent_used": "Watchlist Suggestion Agent",
@@ -172,6 +192,7 @@ class AgentOrchestrator:
 
         elif agent_type == "fundamental_analysis":
             response = await self._fundamental_agent.analyze(query)
+            log.info("agent_completed", agent_type=agent_type, agent_name="Fundamental Analysis Agent")
             return {
                 "response": response,
                 "agent_used": "Fundamental Analysis Agent",
@@ -180,6 +201,7 @@ class AgentOrchestrator:
         elif agent_type == "stock_events":
             events = await self._events_agent.get_events(query)
             formatted = await self._events_agent.get_events_formatted(query)
+            log.info("agent_completed", agent_type=agent_type, agent_name="Stock Events Agent")
             return {
                 "response": formatted,
                 "events": events,

@@ -1,9 +1,9 @@
 """Stock Research Agent workflow using LangGraph."""
 
-import logging
 import operator
 from typing import Annotated, Any, TypedDict
 
+import structlog
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
 
@@ -14,6 +14,8 @@ from src.agents.tools.news_tools import (
 )
 from src.agents.tools.symbol_tools import extract_symbol
 from src.mcp.kite_client import KiteClient
+
+log = structlog.get_logger()
 
 
 def replace_value(current: Any, new: Any) -> Any:
@@ -85,7 +87,7 @@ async def check_holdings_node(
             "steps_completed": ["check_holdings"],
         }
     except Exception as e:
-        logging.error(f"Error checking holdings for {symbol}: {e}", exc_info=True)
+        log.error("holdings_check_error", symbol=symbol, error=str(e), exc_info=True)
         return {
             "holdings_position": None,
             "steps_completed": ["check_holdings"],
@@ -117,7 +119,7 @@ async def get_price_node(
             "steps_completed": ["get_price"],
         }
     except Exception:
-        logging.exception(f"get_price error for symbol {symbol}")
+        log.error("price_fetch_error", symbol=symbol, exc_info=True)
         return {
             "current_price": None,
             "steps_completed": ["get_price"],
@@ -146,7 +148,7 @@ async def fetch_news_node(state: StockResearchState) -> dict[str, Any]:
             "steps_completed": ["fetch_news"],
         }
     except Exception as e:
-        logging.error(f"Error fetching news for {symbol}: {e}")
+        log.error("news_fetch_error", symbol=symbol, error=str(e))
         return {
             "news_articles": [],
             "steps_completed": ["fetch_news"],
@@ -225,10 +227,7 @@ Keep it concise (under 300 words) and actionable."""
         )
 
         if not report:
-            logging.error(
-                f"Empty response content from LLM for symbol {symbol}. "
-                "Response content is empty or None."
-            )
+            log.error("empty_llm_response", symbol=symbol)
             report = (
                 f"Error generating report: Received empty response from AI model. "
                 f"Unable to generate research report for {symbol}."

@@ -1,17 +1,17 @@
 """Stock Events Agent workflow using LangGraph."""
 
-import logging
 import operator
 import re
 from typing import Annotated, Any, TypedDict
 
+import structlog
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
 
 from src.agents.tools.symbol_tools import extract_symbol
 from src.data.scrapers.bse import BSEScraper
 
-logger = logging.getLogger(__name__)
+log = structlog.get_logger()
 
 _PORTFOLIO_KEYWORDS = re.compile(
     r"(my\s+)?(portfolio|holdings|stocks|all\s+stocks)", re.IGNORECASE
@@ -101,7 +101,7 @@ async def resolve_portfolio_node(state: StockEventsState, config: RunnableConfig
             "steps_completed": ["resolve_portfolio"],
         }
     except Exception as e:
-        logger.exception("Error fetching holdings for portfolio events")
+        log.error("holdings_fetch_error", exc_info=True)
         return {
             "error": f"Failed to fetch portfolio holdings: {e}",
             "steps_completed": ["resolve_portfolio"],
@@ -153,7 +153,7 @@ async def fetch_events_node(state: StockEventsState, config: RunnableConfig) -> 
         all_events.sort(key=lambda e: e.get("date", ""), reverse=True)
         return {"events": all_events, "steps_completed": ["fetch_events"]}
     except Exception as e:
-        logger.exception("Error fetching events")
+        log.error("events_fetch_error", exc_info=True)
         return {
             "events": [],
             "error": f"Failed to fetch events: {e}",

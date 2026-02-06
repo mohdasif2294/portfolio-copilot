@@ -7,9 +7,12 @@ from pathlib import Path
 from typing import Any
 
 import chromadb
+import structlog
 from chromadb.config import Settings
 
 from src.rag.embeddings import embed_text, embed_texts
+
+log = structlog.get_logger()
 
 DATA_DIR = Path(__file__).parent.parent.parent / "data" / "vector_store"
 COLLECTION_NAME = "news_articles"
@@ -113,6 +116,7 @@ class VectorStore:
             documents=[doc.content for doc in docs],
             metadatas=[doc.metadata for doc in docs],
         )
+        log.info("vector_store_add", count=len(docs))
 
     def search(
         self,
@@ -172,6 +176,7 @@ class VectorStore:
                     )
                 )
 
+        log.info("vector_store_search", top_k=top_k, symbol=symbol, results=len(search_results))
         return search_results
 
     def delete_by_source(self, source: str) -> None:

@@ -3,15 +3,15 @@
 import csv
 import io
 import json
-import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import httpx
+import structlog
 
-logger = logging.getLogger(__name__)
+log = structlog.get_logger()
 
 BSE_API_URL = "https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w"
 BSE_ANN_BASE = "https://www.bseindia.com/xml-data/corpfiling/AttachLive"
@@ -41,9 +41,9 @@ def _load_scrip_codes() -> None:
 
     if data:
         _symbol_to_scrip = data
-        logger.debug("Loaded %d BSE scrip codes", len(_symbol_to_scrip))
+        log.debug("scrip_codes_loaded", count=len(_symbol_to_scrip))
     else:
-        logger.warning("Could not load BSE scrip codes; events may not work for all stocks")
+        log.warning("scrip_codes_unavailable")
 
     _scrip_loaded = True
 
@@ -58,7 +58,7 @@ def _read_scrip_cache() -> dict[str, str] | None:
             return None
         return json.loads(_SCRIP_CACHE_FILE.read_text())
     except Exception:
-        logger.debug("Scrip cache read failed", exc_info=True)
+        log.debug("scrip_cache_read_failed", exc_info=True)
         return None
 
 
@@ -68,7 +68,7 @@ def _write_scrip_cache(data: dict[str, str]) -> None:
         _CACHE_DIR.mkdir(parents=True, exist_ok=True)
         _SCRIP_CACHE_FILE.write_text(json.dumps(data))
     except Exception:
-        logger.debug("Scrip cache write failed", exc_info=True)
+        log.debug("scrip_cache_write_failed", exc_info=True)
 
 
 def _fetch_bse_scrip_codes() -> dict[str, str]:
@@ -111,14 +111,14 @@ def _fetch_bse_scrip_codes() -> dict[str, str]:
                     result[ticker] = scrip
 
             if result:
-                logger.info("Fetched %d BSE scrip codes from bhav copy (%s)", len(result), date_str)
+                log.info("bhav_copy_fetched", count=len(result), date=date_str)
                 return result
 
         except Exception:
-            logger.debug("Failed to fetch bhav copy for %s", date_str, exc_info=True)
+            log.debug("bhav_copy_fetch_failed", date=date_str, exc_info=True)
             continue
 
-    logger.warning("Could not fetch BSE bhav copy for scrip codes")
+    log.warning("bhav_copy_unavailable")
     return {}
 
 
@@ -267,10 +267,10 @@ class BSEScraper:
             return events
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"BSE API HTTP error for {symbol}: {e.response.status_code}")
+            log.error("bse_api_http_error", symbol=symbol, status_code=e.response.status_code)
             return []
         except Exception:
-            logger.exception(f"Error fetching BSE events for {symbol}")
+            log.error("bse_api_error", symbol=symbol, exc_info=True)
             return []
 
     @staticmethod

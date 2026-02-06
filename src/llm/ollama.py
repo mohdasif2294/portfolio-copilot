@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 
 from src.core.config import get_config
+from src.core.observability import trace_llm_call
 from src.llm.base import CompletionResponse, StreamEvent, ToolCall
 from src.llm.tool_parser import format_tools_as_prompt, parse_tool_calls_from_text
 
@@ -108,6 +109,7 @@ class OllamaProvider:
 
         return ollama_messages
 
+    @trace_llm_call
     async def complete(
         self,
         messages: list[dict[str, Any]],
@@ -286,6 +288,7 @@ class OllamaSimpleProvider:
         """Close the HTTP client."""
         await self._client.aclose()
 
+    @trace_llm_call
     async def complete(
         self,
         messages: list[dict[str, Any]],

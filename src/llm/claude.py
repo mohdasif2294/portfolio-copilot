@@ -1,19 +1,20 @@
 """Claude client with streaming and tool support."""
 
 import json
-import logging
 import os
 import re
 from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Any
 
+import structlog
 from anthropic import Anthropic, AsyncAnthropic
 from dotenv import load_dotenv
 
-logger = logging.getLogger(__name__)
-
 from src.core.config import get_config
+from src.core.observability import trace_llm_call, trace_tool_execution
+
+log = structlog.get_logger()
 from src.llm.base import CompletionResponse, StreamEvent, ToolCall
 from src.llm.tools import get_all_tools
 from src.mcp.kite_client import KiteClient
@@ -107,6 +108,7 @@ class ClaudeProvider:
         self._model = model or config.claude_model
         self._client: AsyncAnthropic = _get_anthropic_client(api_key)
 
+    @trace_llm_call
     async def complete(
         self,
         messages: list[dict[str, Any]],
@@ -247,6 +249,7 @@ class ClaudeSimpleProvider:
         self._model = model or config.claude_model
         self._client: AsyncAnthropic = _get_anthropic_client(api_key)
 
+    @trace_llm_call
     async def complete(
         self,
         messages: list[dict[str, Any]],
@@ -309,10 +312,11 @@ class PortfolioAssistant:
         """Clear conversation history."""
         self._history = []
 
+    @trace_tool_execution
     async def _execute_tool(self, name: str, args: dict[str, Any]) -> str:
         """Execute a tool and return the result as JSON string."""
         if name not in ALLOWED_TOOLS:
-            logger.warning(f"Blocked disallowed tool call: {name}")
+            log.warning("tool_blocked", tool=name)
             return json.dumps({"error": f"Tool '{name}' is not permitted. Only read-only analysis tools are allowed."})
 
         try:
@@ -334,10 +338,12 @@ class PortfolioAssistant:
                         h.get("quantity", 0) * h.get("day_change", 0)
                         for h in holdings
                     )
-                    logger.info(f"Holdings: {len(holdings)} stocks fetched")
-                    logger.debug(
-                        f"Holdings detail - Investment: ₹{total_investment:,.2f}, "
-                        f"Current: ₹{total_current:,.2f}, P&L: ₹{total_pnl:,.2f}"
+                    log.info("holdings_fetched", count=len(holdings))
+                    log.debug(
+                        "holdings_detail",
+                        investment=round(total_investment, 2),
+                        current=round(total_current, 2),
+                        pnl=round(total_pnl, 2),
                     )
                     # Return holdings with pre-calculated summary
                     result = {
